@@ -1,0 +1,240 @@
+
+May 28, 2020
+------------
+
+ 1) main.c - new log triggers code, AND using new getusage() function below :)
+
+ 2) getusage.c - brand new file so I don't have to hardcode the usage() functions
+                 anymore, and be able to now edit them on the fly, without having
+                 to recompile and restart all the time, this has always been time
+                 consuming and frustrating for me actually, so now is the time.
+
+ 3) version.c - changed '2.0m' to '2.0m.1'
+
+ 4) makefile - added getusage.o for the new getusage source file.
+
+ 5) $JNOSROOTDIR/usage - new subdirectory to hold usage files.
+
+     where $JNOSROOTDIR is typically just /jnos
+
+ 6) $JNOSROOTDIR/usage/log.txt - first ever usage file (for JNOS 'log' command).
+
+ 11:37 pm - finally figured out why 'log trigger add A B' crashes JNOS. You have
+ to be sure to include the & (AND) or ! (OR) operator(s) in the pattern, or else
+ JNOS will crash. I have put in a safe guard, warning the user that they forgot
+ to include the operator(s) in the trigger pattern, then it aborts the attempt.
+
+   for example -> log trigger add "ve4klm&forwarding&" "some jnos command"
+
+May 29, 2020
+------------
+
+ 7) files.c - added Usagedir directory support.
+
+June 1, 2020
+------------
+
+ 8) mboxmail.c - enhanced the information available in the SID capure.
+
+ 9) axheard.c, ax25cmd.c - added code to Load and Save axheard list.
+
+ 10) jnosinstaller.c - replaced gets() with fgets() equivalent. 
+      (tired of the compiler warnings, needs to be done)
+
+ 11) nntp.h - several 'unsigned' variables missing 'integer' type.
+
+ 12) tcpgate.c, tnlink.c - intermediate variables added (Jan 15) to make compiler happy.
+
+ 13) config.h.default - added #define BACKUP_AXHEARD.
+
+ 14) forward.c - cleaned up use of WINLINK_SECURE_LOGIN and B2F defines, added
+     proper error checking of the j2userpassword() function.
+
+ 15) j2pwmgr/j2pwrtns.c - j2userpassword() now returns proper error if user not found.
+
+ testing @ 10 pm - things seem okay
+
+June 2, 2020
+------------
+
+ 16) makefile, configure - configuration version string now 02Jun2020_v1.3
+
+ 17) final listing of files changed for this update :
+
+     root@slackware:/jnos/src/dev_2.0m.1# ls -lt * | more
+     -rw-r--r-- 1 root root   2910 Jun  2 14:58 whatchanged.txt
+     -r--r--r-- 1 root root   8323 Jun  2 14:54 makefile
+     -rwxr-xr-x 1 root root   2213 Jun  2 14:53 configure*
+     -rw-r--r-- 1 root root  65796 Jun  2 02:24 forward.c
+     -rw-r--r-- 1 root root   6691 Jun  2 02:12 tnlink.c
+     -r--r--r-- 1 root root  23749 Jun  2 02:11 config.h.default
+     -r--r--r-- 1 root root   2083 Jun  2 01:53 nntp.h
+     -rw-r--r-- 1 root root  11177 Jun  2 01:52 jnosinstaller.c
+     -r--r--r-- 1 root root  43114 Jun  2 01:50 ax25cmd.c
+     -r--r--r-- 1 root root  10540 Jun  2 01:47 axheard.c
+     -rw-r--r-- 1 root root  66762 Jun  2 01:40 mboxmail.c
+     -rw-r--r-- 1 root root   1049 May 29 11:21 getusage.c
+     -r--r--r-- 1 root root  39653 May 29 11:20 files.c
+     -rw-r--r-- 1 root root  82368 May 29 04:34 main.c
+     -rw-r--r-- 1 root root  14146 May 28 01:59 version.c
+
+     Do NOT include config.h !!! postnote - added 'usage' directory
+
+June 16, 2020
+-------------
+
+ * Going over all the MULTIPLE_WL2K_CALLS changes made the past while, note :
+
+ 18) makefile, configure - configuration version string now 16Jun2020_v1.4
+
+ 19) version.c - changed '2.0m.1' to '2.0m.2'
+
+ 20) aprssrv.c - new callsign list 'winlinkcalls', why am I using the code in
+     the APRSD stuff ? because it's extremely compact and useful, and elegant,
+     should really separate the callsign list stuff out at some point. I wrote
+     it over 12 years ago, and it's very handy code, ptrs to ptrs to ptrs ...
+
+     Also created a new wl2kmulticalls() function, it's in there as well, since
+     it needs access to the callist - it is passed a pointer to a function that
+     creates portions of the winlink response message. It's a compact function,
+     might appear a bit complicated - I like to use the word elegant :]
+
+     Pointers to functions are very versatile in specific cases - such as this
+     particular application for allowing JNOS to download messages for multiple
+     winlink user accounts, it just seemed to fit in well - it's pretty cool.
+
+ 21) fbbfwd.c - there is no need to fake out subsequent 'To:' recipient with
+     the 'Cc:' list for any of this winlink message handling, actually causes
+     duplicate messages to everyone involved in certain circumstances. Winlink
+     sends separate proposals for all 'To:' recipients, so there's no point.
+
+     Commented out 'stripping section' with regard to the 'From:' field for
+     the winlink message handling, not quite sure what to do about it, but I
+     didn't feel it was usefull in it's present form, observe it for now ?
+
+ 22) wlauth.c - made J2ChallengeResponse() function 'thread safe' - can't use
+     static buffer anymore, so I need to malloc() each response, since multiple
+     responses are required to download messages for multiple winlink accounts.
+
+     NTM : possible tiny tiny memory leak ? I'm not sure yet (it's harmless)
+
+ 23) forward.c - instead of duplicating code, move existing code into it's
+     own function, so created a new wl2k_build_response() function, the one
+     which also gets called in the new wl2kmulticalls() in aprssrv.c file.
+
+     And other changes required to do the multiple winlink mailbox download.
+
+ 24) j2pwmgr/j2pwrtns.c - this one caught me good, the function j2userpasswd()
+     was actually forcing a lower case on the passed callsign string, which is
+     wrong, it should not be altering content of the passed argument. Couldn't
+     figure out for the longest of time why the callsigns were being passed in
+     lower case for the challenge responses for downloading of multiple winlink
+     user accounts. In the end it was just a misplaced strlwr() function call.
+
+ 25) fixed up the usages/log.txt (the mailmsg parameters are way off) !
+
+ 26) release this one as a patch file as well on top of 2.0m or 2.0m.1 :
+
+     tar cvzf jnos_2.0m.2_patch.tar.gz whatchanged.txt makefile configure forward.c tnlink.c config.h.default nntp.h jnosinstaller.c ax25cmd.c axheard.c mboxmail.c getusage.c  files.c main.c version.c usage aprssrv.c fbbfwd.c wlauth.c j2pwmgr/j2pwrtns.c
+
+     cp jnos_2.0m.2_patch.tar.gz /jnos/src/rsync
+
+  Approaching 10 am, Tuesday morning, June 16, 2020 - Winnipeg time
+
+June 28, 2020
+-------------
+
+ 27) new files, j2strings.[ch], - no more declaring strings on the fly !
+
+ 28) new file, j2KLMlists.c, finally moved lists code out of aprssrv.c, and
+     the command 'aprs calls winlinkcalls' no longer exists, it's been moved
+     to 'mbox winlinkcalls' instead, see item 32) further below.
+
+ 29) modified getusage function, added a prefix parameter, allowing for
+     more unique help files for subcommands like 'aprs calls ...', etc.
+
+ 30) took out hardcoded usage in main.c, make sure getusage() has a prefix.
+
+ 31) aprssrv.c - callsigns lists code taken out, moved to new j2KLMlists.c
+
+ 32) mboxcmd.c - 'mbox winlinkcall' now pluralized (winlinkcalls), and calls
+     the new docallslist() in j2KLMlist.c, old Wl2kcall[] and dombwl2kcall()
+     not used anymore.
+
+ 33) forward.c - now using j2KLMlists.c functions to grab callsigns.
+
+ 34) aprsmsg.c and aprs.h - adjusted for new callsigns list code.
+
+ 35) version.c - changed '2.0m.2' to '2.0m.3'
+
+ 36) configure - configuration version string now 28Jun2020_v1.5
+
+ 37) makefile - added j2strings.o and j2KLMlists.o, changed configuration
+     string to match item 36) above.
+
+ 38) release this one as a patch file as well on top of 2.0m or 2.0m.[1-2] :
+
+     tar cvzf jnos_2.0m.3_patch.tar.gz whatchanged.txt makefile configure j2strings.[ch] j2KLMlists.[ch] getusage.c main.c mboxcmd.c aprssrv.c forward.c aprsmsg.c aprs.h version.c usage
+
+     cp jnos_2.0m.3_patch.tar.gz /jnos/src/rsync
+
+  Approaching 5 pm, Sunday afternoon, June 28, 2020 - Winnipeg time
+
+July 7, 2020
+------------
+
+ * cleaning up official JNOS 2.0 website, focusing on JNOS installerv2.2
+
+    removed jnosinstaller.c and installerv2.1 subdirectory from rsync area
+     (old and not useful anymore)
+
+    new installerv2.2.tar.gz file added to rsync area
+
+   remove jnosinstaller.c from makefile, now part of installer package
+   post note : 03Aug2020, done !
+
+ * source and installer release history also on JNOS 2.0 website, and I have
+   revamped the documentation on the installer.
+
+ * lastly, updated the release history on what I did today ...
+
+July 8, 2020
+------------
+
+ * had to fix a few things, the JNOS configuration was not working, because of
+   a badly generated autoexec.nos - don't use rip() when copying from autoexec
+   template file, so it's working now. Decided to create a dummy jnos (script)
+   for the installer, since I don't ship generic binary anymore. The installer
+   won't break then (due to lack of a binary). The script basically tells you
+   to compile your own JNOS ... That should be it for now ...
+
+August 3, 2020
+--------------
+
+ * bumped configure and makefile to 03Aug2020_v1.6, configure script checks
+   for existence of #define RDATECLI and recommends to not use it anymore.
+
+   config.h.default - now setting '#undef RDATECLI'
+
+   version.c - bumped up to 2.0m.4
+
+   tipmail.[ch] - the *Tiplist variable should never have been defined
+   in header file, now a static variable in source file, was creating
+   multiple define errors with GCC 10 (Manjero distro).
+    (thanks to Kayne, N9SEO for reporting this).
+
+   removed jnosinstaller from makefile (as noted on July 7) !
+
+     -rwxr-xr-x 1 root root   2579 Aug  3 16:10 configure*
+     -r--r--r-- 1 root root   8357 Aug  3 16:09 makefile
+     -rw-r--r-- 1 root root   9969 Aug  3 16:08 whatchanged.txt
+     -rw-r--r-- 1 root root  16307 Aug  3 16:06 tipmail.c
+     -r--r--r-- 1 root root    956 Aug  3 16:04 tipmail.h
+     -r--r--r-- 1 root root  23748 Aug  3 15:27 config.h.default
+     -rw-r--r-- 1 root root  14146 Aug  3 15:00 version.c
+
+  This is the patch file I have put out after finishing up the above :
+
+    tar cvzf jnos_2.0m.4_patch.tar.gz whatchanged.txt configure \
+     makefile tipmail.[ch] config.h.default version.c
+

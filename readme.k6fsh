@@ -1,0 +1,55 @@
+
+Bob (K6FSH) had some site specific requirements, and requested I add his mods
+to the next release (JNOS 2.0i) so he would not have to worry about adding them
+each time a new version of source came out - 19Oct2010, Maiko - done !
+
+Below are 4 new directives that have been added to 'config.h.default' :
+
+  #undef MBX_TAC_CALLCHECK
+  #define MBX_AREA_PROMPT
+  #define MBX_MORE_PROMPT
+  #undef LISTING_ISNT_READING
+
+These values are defaulted such that JNOS 2.0 operates like it always has.
+
+For a DETAILED description of each of the 4 entries, read below :
+
+//  Allow Tactical Call (BBS) validation, too.
+//  (requires MBX_CALLCHECK)
+//  Allows calls explicitly defined in ./TacCalls file.
+//  See callval.c
+//  This affects telnet logins and
+//  AX.25 connections as well.
+//  NOTE: This is new after JNOS2.0h.  If you don't care
+//  about tactical call checking, leave it undefined.
+//  K6FSH  2010-07-07
+// #define MBX_TAC_CALLCHECK
+#undef MBX_TAC_CALLCHECK
+
+// Undefine MBX_AREA_PROMPT to suppress the default 'Area' indication upon
+// BBS connection. Same as 'xm 0' command.
+// This is done for Outpost compatibility.
+// www.outpostpm.org
+// Note: Leave it defined for default JNOS2.0h behavior.
+// K6FSH  2010-07-07
+// #undef MBX_AREA_PROMPT
+#define MBX_AREA_PROMPT
+
+// Undefine MBX_MORE_PROMPT to suppress the default -more- prompt during
+// BBS interaction. This is done for Outpost compatibility.
+// www.outpostpm.org
+// Note: Leave it defined for default JNOS2.0h behavior.
+// K6FSH  2010-07-07
+// #undef MBX_MORE_PROMPT
+#define MBX_MORE_PROMPT
+
+// LISTING_ISNT_READING:
+// When defined, listing messages from public areas will not cause those
+// messages to be marked as READ. Thus, the messages will continue to show
+// up when the 'L' command is issued - until the user actually reads them.
+// Requires that USERLOG is also defined.
+// NOTE: For default JNOS2.0h behavior, leave LISTING_ISNT_READING undefined.
+// K6FSH  2010-07-07
+// #define LISTING_ISNT_READING
+#undef LISTING_ISNT_READING
+

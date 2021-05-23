@@ -1,0 +1,107 @@
+
+bid_wp.c - TAKEN WHAT WAS NEEDED !!! - bid and wp expiry, not doing bid (yet)
+ *note, I don't believe this is the same as message expiry (totally different)
+
+config.c - DONE !!!
+
+files.c - TAKEN WHAT WAS NEEDED !!!
+
+mailbox2.c - TAKEN WHAT WAS NEEDED !!!
+
+mailbox.c
+map.c
+pbbscmd.c
+reqsvr.c - parseheader, getfield, rdaemon taken, that's all we need
+smtpserv.c
+
+tnosmap.c - main() program, not necessary right now
+
+version.c
+
+JNOS 2
+------
+
+01Feb2012
+
+  makefile - added wpages.o in the servers section
+  config.c - now has wpages -> dooldwpages (create a new wpages.c file)
+  wpages.c - contains ONLY the wpages aspect of TNOS bid_wp.c file
+  files.c - added stuff from TNOS files for WPAGES
+
+  merge.c and sort.c - both TNOS source files required for this project, so
+  need to add both to the makefile and edit them to include #ifdef WPAGES
+
+02Feb2012
+
+  makefile - added merge.o and sort.o (move sort.c from TNOS into JNOS src)
+  clean compile now (good start) - next deal with DONT COMPILE parts !
+  had to 'chmod o+r merge.c sort.c' they were not getting rsync'd :)
+
+  okay, all DONT_COMPILE portions are dealt with, now to integrate
+  the mailbox portions of the code.
+
+  mboxfile.c - TNOS mailbox2.c - done !!! just have to put in dowhat()
+       addition for the dombwpages stuff
+
+  mailbox.c - take TNOS changes from mailbox.c as well
+
+  mboxmail.c - also takes TNOS changes from mailbox.c as well
+  -fixed a problem, brian uses buf, we use that damn tfile fp
+  -also added #ifdef B2F to get the include file (b2f.h) to resolve
+  the j2noB2F() prototype
+
+these 2 don't seem important for us.
+map.c
+pbbscmd.c
+
+smtpserv.c - this is a BIG one I think, so first check in the smtp gateway
+             and exceptions code that I added for better gateway options,
+             then check it out again for these new WPAGES changes - done!
+
+TNOS has a separate get_msgid () TYPE, so messages and bulletins get
+their own sequence number source. I don't think that's a big deal for
+us, so just replace both TYPES with the same source (still unique).
+
+version.c - done ! Just after noon time, preliminary version complete !!!
+
+         just little bits to figure out, and maybe let people test it,
+         but FIRST make a document (look at the TNOS docs) then release
+         it for testing, with caveats about stuff not quite complete.
+
+         actually test it first myself and see how it works.
+
+  rm version.o smtpserv.o mboxmail.o mailbox.o mboxfile.o
+  rm wpages.o sort.o merge.o files.o config.o
+  vi config.h.default
+  make
+  rm config.h
+
+Users (uptime 29:19:03:23), February 2, 2012 :
+
+Area: ve4klm (#0) >
+ml
+Past users:
+User       Logins  Time since last   User       Logins  Time since last
+ve4klm         24       0:00:00:10 : i0ojj        1374       0:00:21:23
+ve2har        996       0:00:29:29 : ve4bbs       1028       0:00:51:37
+aa6hf         165       0:00:56:04 : yv4fnc         65       0:06:39:36
+ve6tpr          1       1:00:12:30 : ve2pkt          2       2:05:44:18
+lu7abf          1       9:02:30:48 : nc6j            2      14:05:21:30
+ve3zda          2      15:09:01:09 : f1rtl           8      15:22:07:21
+ve2bcw          1      17:03:19:41 : kd6oat          1      18:04:02:32
+ct4dk           1      21:05:59:56 : g4xta           1      24:00:12:06
+
+* RESTART and play around with WPAGES NOW !!
+
+February 4
+----------
+
+Try and get buildwp.c compiled and working, apparently creates wpages
+entries by going through the entire spool/mail directory, using all of
+the messages stored there. Not a bad idea actually, work on this.
+TODO
+
+Noticed that Lantz did not put everything under WPAGES directives, there
+are alot of calls to wpages_exp that are not, so I initially missed many
+of them while porting. Ongoing ...
+

@@ -1,0 +1,424 @@
+
+March 15, 2009
+--------------
+
+      OKAY - that's all for now - do another make clean, make, check errs.
+
+      TODO CONTINUE - searching headers for LONG vars, mostly in structs.
+
+      * note - setlong (might want to rename it to setint32 instead asp).
+
+      OKAY - now searching all header files for LONG vars that might be
+             an issue, or might not, but should be changed anyways :
+
+        bm.h, bmutil.c - isnewprivmail() changed to return INT, not LONG.
+        mailbox.c - call to isnewprivmail() comparison just > 0, not > 0L.
+        cmdparse.h - flags is int32, setflag should use int32, not long.
+        cmdparse.c - setflag, the flag argument is int32, not a long.
+
+        user privs - ouch !!! I really don't want to touch this, leave
+                     it alone for now, since the function and the privs
+                     itself is defined as long, not one as int32, and
+                     the other as long, but both are LONG. Leave 4 now.
+
+      nrcmd.c - casting issues with MK_FP() macro, use an inbetween
+                long Lt var, and change htoi() to htol() instead of
+                casting the int function to a long.
+
+      ax25user.c - same as above.
+
+      ax25mail.c - use an inbetween long Lt var for (void*) cast.
+
+March 13, 2009
+--------------
+
+   * unix.h - don't prototype system calls, use system headers instead,
+              did a 'make clean', then 'make'. Compiled mostly CLEAN :
+
+      tun.c - added include for <sys/ioctl.h> for ioctl() prototype.
+
+   * Compiling on a true 64 bit system, has resulted in a few other issues,
+     mostly 'cast to pointer from integer of different size'. That one it
+     turns out uses the not-so-liked 'INT cast to VOID* cast back to INT'
+     type of scenario. This affects the following files below :
+
+      main.c - Not interested in domdump() anymore - too LINUX specific !
+
+      smtpcli.c - I don't like the way (void*) is used on a value, should
+                  be used on the pointer instead of the value, but it is
+                  allowed -> do some creative casting to get around this,
+                  for example, int to long to void* back to long to int.
+
+      ttylink.c - same casting issue with the 'type' variable.
+      smisc.c - call to smtptick, use (void*) cast on long, not on int.
+      convers.c - same casting issue with the 't' void* variable.
+      mailbox.c - same casting issue with the 't' void* variable.
+      tcpcmd.c - casting issues with MK_FP() macro, (void*) again.
+
+      audit.c - removed from makefile (none of the functions used).
+
+      kernel.c - in phash(), casting of event (use inbetween long Lx var).
+
+March 12, 2009
+--------------
+
+   * All compile time warnings up to this point are now gone - YAY !!!
+
+March 7/8/9/10, 2009
+--------------------
+
+     rwhodump.c - added (const time_t*) to 3 ctime() calls.
+
+     nrcmd.c - added (int) cast to Nr_autofloor in quality comparison.
+     nr4.c - added (int) casts to cb->window comparisons.
+     lzw.c - added (int16) cast to (bp->size - bp->cnt) comparison.
+
+     nr4subr.c - added (int) casts to cb yournum, yourid, myid,
+                 window comparisons.
+
+     nr3.c - nr_finally_route() is static int, added (int) cast to bp
+             quality comparison with ifp nr_autofloor.
+
+     ax25.c - (uint32) cast on ip->source compare with AXIP[].ipaddr
+     aprssrv.c - added callcheck() prototype, other stuff also done!
+     aprscfg.c - removed 'const' from Sdescstr, aprsstart returns a value.
+     aprsmsgdb.c - suggest parentheses around a few fopen() calls, and
+                   check return value of fopen when writing idx.
+     aprswx.c - suggest parentheses around an fopen() call.
+
+     files.c - add #include <unistd.h> for chroot() prototype, added (int)
+               cast to the front of the strlen() call.
+
+     socket.c - replaced (int*)NULL with (int*)0, had to cast SOCKSIZE to
+                with (int) for some reason, maybe because of sizeof call.
+
+     sockcmd.c - PENDING TODO - unique what's with this sbrk() ???
+
+     unix.c - PENDING TODO - issue with _exit() and <unistd.h> redefines ???
+
+     domain.h - TTL_MISSING is not LONG contant, (int32) cast added.
+
+     config.c - change Nsessions to 'int', was 'unsigned', which made no
+                sense - this really cleaned up the compile on session.o
+                and sessmgr.o files.
+
+     session.c - changed 'i' from 'unsigned' to 'int' in sessptr() func.
+
+     smisc.c - added a int32 cast to s_addr when checking rp->route.
+
+     convers.c - added int cast to strlen, int32 cast to s_addr comp.
+
+     sysevent.h - added prototype for j2sysevent(), it was missing.
+
+     b2f.h - new B2F header file for B2F function prototypes.
+
+     b2f.c - include new B2F header file, make noB2Fcalls[] static !
+
+     mboxcmd.c - include new B2F header file
+
+     mailbox.c - include new B2F header file, callcheck() prototype,
+                 and put a (int) cast on a strlen() call.
+
+     mboxmail.c - added a (size_t) cast to make strspn() happy, and do
+                  not use LONG constants on j2pause() calls.
+
+     mailbox.h - added prototype for 'logmbox' function, resolves warnings
+                 in mboxgate.c, forward.c, and fbbfwd.c files.
+
+     lzhuf.c - fixed a bunch of comparison between signed and unsigned
+
+     tcpout.c - removed 'long Tcp_maxwait', not even used in here.
+
+     tcpcmd.c - Tcp_maxwait now an int32 and static to this module, and
+                a couple of setlong() calls modified to cast (int32*),
+                not (long*) anymore. Changed 'mask' to uint32, added
+		a int32 cast when doing the AND operation on 'src'.
+
+     TODO - Try and split the HFDD #define
+     into specific devices (right now it's all or none). Splitting the
+     define into say HFDD_PTC, HFDD_DXP, HFDD_232 will save code space,
+     cause I can't see users wanting all devices (mostly for DOS where
+     space is limited).
+
+   * Now looking for strictly j2pause() calls, we don't want LONG constants
+
+     hfdd.c, expire.c, bmutil.c, sessmgr.c, kisspoll.c,
+        ppppap.c, tipmail.c, ttylink.c, unixasy.c,  
+      * j2pause() does not use LONG constant. The above NOT CHECK IN YET
+
+     rspf.c -> j2pause() call makes NO SENSE - go back to this later ...
+
+     icmpcmd.c - timeout var changed from long to int32, using atoi() to
+                 read from command line, then cast to int32 instead of
+                 using atol(). j2alarm() does not use LONG constant.
+
+     aprssrv.c - j2pause() does not use LONG constant, plus other changes
+                 from December 21. NOT CHECKED IN YET
+
+   * global.h - comment out the clock() prototype - that's a system call !
+
+     smtpserv.c -> removed (long) casts and use of LONG constants on the
+                   j2alarm() and j2pause() calls. Changed 'SmtpServTdisc'
+                   to an int32 value, no longer int.
+
+                  fixed up some comparison between signed and unsigned,
+                  wrt to netmask (added int32 casting).
+
+     smtpcli.c -> Changed 'Smtpt4' to static int32, no longer int. Changed
+                  extern int 'SmtpServTdisc' to extern int32, use setlong()
+                  instead of setint() to set the value. j2alarm() does not
+                  use a LONG constants.
+
+                  Added proper prototypes for external SDRE functions, and
+                  fixed up some comparison between signed and unsigned, wrt
+                  ipaddr and Ip_addr (added uint32 casting). 
+
+March 6/7, 2009
+---------------
+
+ *** TODO - look at ALL j2alarm() and j2pause() calls - convert arg to int32
+
+     PENDING - TODO TODO
+
+     rarp.c
+     timer.c
+     forward.c
+     dialer.c
+     main.c
+
+     done - j2alarm() and j2pause() constants are not LONG :
+
+      xmodem.c, term.c, rdate.c, pop2serv.c, pop3serv.c, nntpserv.c,
+      nntpcli.c, mboxgate.c, mboxfile.c, mailbox.c, convers.c
+
+     done - also changed setint() calls to use setlong() instead :
+
+      tcpgate.c - Gatetdisc changed from int to int32, need to use
+                  setlong() instead of setint(), j2alarm() should not
+                  be using LONG constants.
+
+      mailcli.c - Popt4 changed from int to int32, need to use setlong()
+                  instead of setint(), j2alarm() constants are not LONG.
+
+     mailutil.c -> extern Popt4 changed to int32, j2alarm() and j2pause()
+                   constants are not LONG values.
+
+     http.c -> Httptdisc changed from int to int32, need to use setlong()
+               instead of setint(), j2alarm() constants are not LONG.
+
+     hop.c -> Hopmaxwait changed from unsigned short to int32, hopwait()
+              function rewritten to just use the setlong() instead of
+              setshort(), j2alarm() calls do not use LONG constants
+
+     fbbfwd.c -> changes from January 6, plus j2alarm() does not use
+                 LONG constants, recv_yapp() expects int32 in 3rd arg,
+                 so remove the LONG constant from multiplier.  NOT CHECKED
+                 IN YET.
+  
+  * more 64 bit, from January 27, 2009, review and check in changes ...
+
+    global.h - no more -DLP64, just use int now for 32 and 64 bit. The
+               int is 4 bytes on either system, so always typedef int32
+               to an int and uint32 to an unsigned int (on linux). Also
+               added printf macros (INT32P and UINT32P).
+      
+    unixasy.c - find_speed() now passed int32, not a long. All 'long' vars
+                changed to int32 (speed, interval, and bps). asy_speed()
+                now passed int32 as well, don't use long constants (0L).
+
+              * use INT32P and UINT32P to replace the %l and %lu in any
+                of the tprintf() calls.
+
+    asy.h - asy_init() speed argument is now int32, not a long. Also
+            the asy_speed() bps arg changed from long to an int32.
+
+ domain.c - Note the 'ttl' is already a 'int32', but there is 'long' code
+            that should be changed to 'int32' for the 64 bit compatibility,
+            also removed long standing '#ifdef notdef' code, not needed,
+            and j2alarm() does not use LONG constants. NOT CHECKED IN YET !!!
+
+March 5, 2009
+-------------
+
+ * Back to the 64 bit headache (AGAIN), let's first review changes made
+   so far (starting back in December 11, 2008). Then check them in and get
+   them over with.
+
+    sockaddr.h - s_addr is 32 bit in ALL environments - changed to uint32
+
+    ip.h - count & time are 32 bit in ALL environments - changed to int32,
+           also incorporated new flag (RTDYNGWROUTE) by N8CML regarding a
+           few enhancements he did to the dynamic gateway routing code.
+
+    unix.c - not checked in yet !
+
+    nr4.h - Nr4irtt, acktime & choketime are 32 bit in ALL environments,
+            changed to int32. The srtt & mdev in the nr4cb structure are
+            also 32 bit in ALL environments, and are changed to int32.
+
+    cmdparse.c - in the setlong() function, removed K&R style prototyping,
+                 changed 'var' from long* to int32* - 32 bit in ALL envs.
+
+    global.h - not checked in yet !
+
+    unixtm.h - not checked in yet !
+
+   Now from December 14, 2008, review and check in changes ...
+
+    ax25.h - irtt, t2, t3, t4, blimit, & maxwait in 'ifax25' struct
+             must be 32 bit in ALL environments, changed to int32.
+
+    ax25cmd.c - the first argument in the setlong() calls should be 32bit for
+                ALL environments - changed from (long*) to (int32*), changed
+                Axmaxwait from long to in32, and made it static. Finally,
+                last argument in doax25t4() call should be cast to (void*),
+                not (long*) as previously done.
+
+   Now from January 27, 2009, review and check in changes ...
+
+    ftpserv.c - j2alarm expects int32, remove (long) cast, and do not use
+                a long constant (ie, changed 0L to just 0).
+
+    ftpsubr.c - timeoutms argument in recvfile changed to int32, do not use
+                long constants on j2alarm() calls - changed 0L to just 0.
+
+    ftp.h - not checked in yet !
+
+    kisspoll.c - interval argument in kiss_poller() changed to int32.
+
+    unixasy.h - speed, rxints, txints, rxchar, txchar, rxput, rxovq,
+                rxblock, txget, txovq, txblock will be 32 bits in ALL
+                environments. All 'long' changed to 'int32', etc.
+
+ ------------------------------------
+
+   STOP !!! - restore all those changes from backup, and start this again.
+              The following are just NOTES and have been backed out !!!
+
+ <<<< JUST THOUGHTS, DECIDED AGAINST THIS >>>>
+
+   TODO -> considering getting rid of setlong() function, since we are
+           not going to be setting any LONG values anymore, just use the
+           existing setint() function instead.
+
+ * HOLD IT !!!! What a mess - Just realized why the setlong() and setint()
+   and all the int32, long, etc --- in borlandc, INT = 2 bytes, LONG = 4
+   bytes - linux 32 bit INT = LONG = 4 bytes, 64 bit INT = 4, LONG = 8 !
+
+ * Back to the 64 bit headache. Going back to December 11, it just dawned
+   on me that on 32 bit system INT and LONG are identical in size, both are
+   4 bytes. On 64 bit systems, the INT is also 4 bytes (unchanged). So, I
+   have removed the -DLP64 permanently, and will just declare the 'uint32'
+   and 'int32' as INT now, regardless of whether system is 32 or 64 bits.
+
+   went back and changed the following files again (stuff I previously
+   changed from long to int32 NOW changed from long to int), and LP64
+   option REMOVED PERMANENTLY from global.h and makefile :
+
+      sockaddr.h, ip.h, unix.c, nr4.h, cmdparse.c, global.h, unixtm.h
+
+ * Same with December 14 changes to the following files :
+
+     ax25.h, ax25cmd.c
+
+ * Same with January 27 changes to the following files :
+
+     ftpserv.c, ftpsubr.c,
+
+ * OH GREAT !!! I've run into quite a few LONG constants ! Converting stuff
+   to the INT is going to mean I have to remove the trailing 'L' in all the
+   constants for stuff changed from LONG to INT. Crap - comb the code :(
+
+ * global.h - comment out the clock() prototype - that's a system call !
+
+ * ftp.h - timeoutms paramenter in recvfile is now int32 (int), not LONG,
+   due to the fact that it gets passed to j2alarm calls, which are int32.
+
+ <<<< END OF JUST THOUGHTS, DECIDED AGAINST THIS >>>>
+ 
+January 27, 2009
+----------------
+
+ ftpserv.c - j2alarm() expects 'int32', removed (long) cast to j2alarm() call.
+
+ ftpsubr.c - changed 'timeoutms' arg for recvfile to 'int32' instead.
+
+ domain.c - Note the 'ttl' is already a 'int32', but there is 'long' code
+            that should be changed to 'int32' for the 64 bit compatibility,
+            also removed long standing '#ifdef notdef' code, not needed.
+
+ asy.h - force 'speed' in asy_init() and 'bps' in asy_speed() to 'int32',
+         not 'long' - for 64 bit compatibility.
+
+ unixasy.c - converted all 'long' to 'int32', including kiss_poll stuff,
+             which calls j2alarm (which expects int32 anyways, NOT a long
+             variable) in kisspoll.c module.
+
+ kisspoll.c - converted the (long) cast to (int32), for 64 bit compatibility.
+
+January 6, 2009
+---------------
+
+ fbbfwd.c - moved development log() calls (bodysize stuff) into debug context,
+            because they were filling up the main JNOS log with too much. Also
+            removed (cleaned up) some unused code.
+
+  ksubr.c - stkutil () function, should check if 'pp->stack' is null, or
+            else it crashes when we try to access resulting null ptr 'sp'.
+
+December 14, 2008
+-----------------
+
+In most of the changes I made on the 11th, there is no need to put
+the #ifdef USE_LP64, just change the long to an int32, period. The
+typedef in global.h file should suffice to set the proper number of
+bits for the int32 typedef anyways. There is not point switching
+between the use of int32 and long in the actual code, just stick
+with using int32 in the code from now on.
+
+ax25.h - force irtt, t2, t3, t4, blimit, & maxwait in 'ifax25' struct
+         to be 32 bit vars (int32), not long.
+
+ax25cmd.c - force (long*) to (int32*) for the setlong() calls, change
+            the Axmaxwait variable from long to int32, & make static.
+
+version.c - bumped up to 2.0f5 !
+
+December 11, 2008
+-----------------
+
+Looks like my SL 5.2 box compiles 64 bit by default, as to SL 5.0 which
+seemed to work before. Anyways, guess we need to start looking at 64 bit
+architecture. Made some patches to get things working. I noticed that JNOS
+compiled on a SL 5.2 x86_64 box was resulting in telnet getting errno 97,
+and the display not working correctly for telnet sessions, etc, etc.
+
+Will use a new -DUSE_LP64 in the makefile to enable the changes in the
+code at compile time. LP64 (64 bit for linux) treats long, long long,
+and pointer twice the size of what is done in the LP32 (32 bit env).
+
+sockaddr.h - force s_addr to be 32 bit in LP64 environment.
+
+ip.h - force count & time to be 32 bit in LP64 environment.
+
+unix.c - secclock() & msclock() force 32 bit return in LP64 environment.
+
+nr4.h - force Nr4 irtt, acktime & choketime to 32 bit in LP64 environment,
+        as well as the srtt & mdev in the nr4cb structure.
+
+cmdparse.c - force var argument to setlong() to 32 bit in LP64 environment.
+
+global.h - redefine the typedef for int32 and uint32 if LP64 is set,
+           and do NOT declare clock() as well.
+
+unixtm.h - removed secclock() & msclock() declarations, no point.
+
+* Put patch on my website to allow people to compile JNOS 2.0f4 in 64 bit ...
+ 
+December 9, 2008
+----------------
+
+Everything released to the massed as JNOS 2.0f4, updated my website, then
+wrote some fairly detailed release notes to explain ALL changes made since
+the last official release, back in December of 2007.
+

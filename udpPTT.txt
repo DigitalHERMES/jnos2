@@ -1,0 +1,85 @@
+
+#
+# 28Jan2021, Maiko Langelaar / VE4KLM
+#
+# VERY SIMPLE PERL SCRIPT that listens for a UDP packet
+# from JNOS telling it to turn PTT on or PTT off. This
+# was written strictly for the VARA modem support.
+#
+# I have older rigs, SERIAL PORT (RTS pin) PTT works great.
+#
+# Can't justify spending money on interface boxes or boards.
+#
+# This was slapped together from bits and pieces of PERL
+# code easily found all over the internet. PERL makes it
+# so easy to write UDP listeners, nothing beats it ...
+#
+# Using the LATEST strawberry PERL on a 64 bit Windows 7 PC
+#
+#
+
+use Win32::SerialPort;
+
+use IO::Socket::INET;
+
+use Time::HiRes qw(usleep);
+
+print "\n  UDP Listener for PTT Control using RTS line on local Serial Port\n";
+print "\n  JNOS can send us the following commands over UDP port 8400\n";
+print "\n     \"PTT ON\" raises RTS, \"PTT OFF\" drops RTS\n";
+print "\n  Use with the newly added JNOS 2.0 VARA modem support\n";
+print "\n  Slapped together Jan 28, 2021 by Maiko Langelaar, VE4KLM\n";
+print "\n  WARNING : NOT for unattended use, very experimental, I am NOT";
+print "\n  responsible for burning out your TX if you're not sitting there";
+print "\n  keeping an eye on it. This saves me from having to spend money";
+print "\n  on an interface box or board, RTS works just fine !!!\n\n";
+
+my ($socket,$received_data);
+
+my $port_name = 'COM1';
+
+my $portObj = new Win32::SerialPort($port_name)
+     || die "Can't open $port_name: $!\n";
+
+$socket = new IO::Socket::INET(LocalPort => '8400', Proto => 'udp',)
+     || die "can't create socket\n";
+
+print "  Making sure we drop RTS line before going any further ...\n";
+
+$portObj->rts_active(No); 
+
+print "\n  Now Waiting for PTT control commands from JNOS ...\n\n";
+
+while(1)
+{
+   $socket->recv($received_data,100);
+
+   if ($received_data eq "PTT ON")
+   {
+     print "  ptt on\n";
+   
+     $portObj->rts_active(Yes);
+   } 
+
+   if ($received_data eq "PTT OFF")
+   {
+     print "  ptt off\n";
+
+     $portObj->rts_active(No); 
+   }
+}
+
+$portObj->lookclear();
+
+$portObj->close();
+
+exit 0;
+
+# just some other sample code I found originally
+
+#$portObj->rts_active(No); 
+#usleep (1000000);
+
+#$portObj->rts_active(Yes); 
+#usleep (1000000);
+

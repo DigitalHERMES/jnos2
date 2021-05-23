@@ -1,0 +1,29 @@
+
+26Aug2011
+
+donrneighbour() and dorouteinfo in nrcmd.c
+------------------------------------------
+
+restructure to accomodate both BPQ or INP (argggg) ...
+
+27Aug2011
+
+interesting, Xnet data instantly crashes my JNOS ...
+
+line 184 of newipn.c
+
+184             if ((nr_neigh = find_nrnbr (ax25->remote, ax25->iface)) == NULLNTAB)
+
+(gdb) print ax25
+$1 = (struct ax25_cb *) 0x0
+(gdb) print ax25->remote
+Cannot access memory at address 0x1b
+(gdb) print ax25-iface
+No symbol "iface" in current context.
+
+  It's that DAMN null ax25 pointer AGAIN !!!
+
+Wonder if it's the *agressive* or massive number of netrom BC coming
+in at the time that does this ? I only saw it when the initial netrom BC
+started coming in from Xnet, after that it was *calm* ...
+

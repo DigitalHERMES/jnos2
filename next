@@ -1,0 +1,34 @@
+arp.c:        ap->prev->next = ap->next;
+bootpdip.c:    for(prev = (struct q_elt *) source_queue->head; prev->next != qel; prev = prev->next)
+bootpdip.c:        prev->next = NULLQ_ELT;   /* there is a prev elt, since we return on first */
+bootpdip.c:    prev->next = qel->next;
+domain.c:        dp->prev->next = dp->next;
+ip.c:                nextfrag->prev->next = nextfrag->next;
+iproute.c:        rp->prev->next = rp->next;
+kernel.c:        entry->prev->next = entry->next;
+mailcli.c:                npprev->next = np->next;
+memlog.c:			if (p->prev) p->prev->next = p->next;
+nntpcli.c:                npprev->next = np->next;
+nntpserv.c:                    npprev->next = np->next;
+nr3.c:        bp->prev->next = bp->next;
+nr3.c:            rp->prev->next = rp->next;
+nr3.c:            np->prev->next = np->next;
+nr3.c:        fp->prev->next = fp->next;
+nrcmd.c:                        bp->prev->next = bp->next ;
+nrcmd.c:                            np->prev->next = np->next ;
+nrcmd.c:                    rp->prev->next = rp->next ;
+rip.c:        ra->prev->next = ra->next;
+rip.c:        rl->prev->next = rl->next;
+rip.c:        rl->prev->next = rl->next;
+rspf.c:    for(prev = Adjs; prev != NULLADJ; prev = prev->next)
+rspf.c:        if(prev->next == adj)
+rspf.c:                    prev->next = adj->next;   /* Unlink */
+rspf.c:                prev->next = re->next;
+rspf.c:                prev->next = rr->next;
+rspf.c:                    rrprev->next = rr->next;
+slip.c:                            bprev->next = NULLBUF;
+smtpserv.c: 			prev->next = ptr->next;
+socket.c:        inprev->next = in->next;
+tcpcmd.c:                    prev->nxtbits = tpacc;
+timer.c:        tprev->next = t;
+tipmail.c:                prev->next = tip->next;

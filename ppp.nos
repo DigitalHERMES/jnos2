@@ -1,0 +1,20 @@
+
+#
+# This NOS script is called by the VARA HF modem interface
+# code when it detects a physical connection with a remote
+# system, also running JNOS in the same configuration.
+#
+# Edit to suit your own needs
+#
+# January 16, 2021, Maiko (VE4KLM)
+#
+
+ppp vara0 trace 2
+
+ppp vara0 lcp timeout 60000
+ppp vara0 lcp open
+ppp vara0 ipcp timeout 60000
+ppp vara0 ipcp open
+
+route add 172.16.72.0/24 vara0
+

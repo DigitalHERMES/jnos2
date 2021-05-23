@@ -1,0 +1,26 @@
+
+ differences between 2.0j.7v and 2.0j.7u - March 8, 2016
+ -------------------------------------------------------
+
+1) I am trying to improve the quality and usefulness of what is logged in the
+   main JNOS log file during forwarding sessions, a work in progress, but I'd
+   like to get an update out that might be of help to some folks.
+
+   Files : fbbfwd.c, lzhuf.[ch], mailbox.c
+
+2) Now logging subject and msgid in spool/mail.log file. I guess I should put
+   in a flag for those who don't care to log this extra information (sorry).
+
+   Files : smtpserv.c
+
+3) Added debugging to try and figure out where the incoming message date and
+   time (supposedly in CST) of a forwarded message are being taken from, and
+   how it affects the indexing of the date for that message. This is strictly
+   debugging, hopefully will be removed 'soon'.
+
+   Files : index.c
+
+4) Instructions (to generate a new JNOS binary) :
+
+   rm fbbfwd.o, lzhuf.o mailbox.o, smtpserv.o index.o ; make
+

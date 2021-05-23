@@ -1,0 +1,611 @@
+ax25mail.c:        whatcall = up->cb.ax25->jumpstarted;
+convers.c:            pax25(cp->name,up->cb.ax25->remote);
+forward.c:                    strcpy(up->eol,"\r" /*AX_EOL*/);  /* just CR */
+icmpcmd.c:        if ((up=itop(s)) != NULLUSOCK && up->type != TYPE_RAW) { 
+look.c:    if(up->look) {
+look.c:    up->look = Curproc;     /* Tell the socket to echo data to this process ! */
+look.c:                    up->look = NULL;    /* Disable echoing in socket layer */
+look.c:                    stop_timer(&(up->owner->alarm));    /* disallow mbox timeout */
+look.c:                        up->look = Curproc; /* Enable echoing in socket layer */
+look.c:                        resume(up->owner);
+look.c:                        start_timer(&(up->owner->alarm));    /* reallow mbox timeout */
+look.c:        up->look = NULL;
+look.c:            resume(up->owner);
+look.c:            start_timer(&(up->owner->alarm));    /* reallow mbox timeout */
+look.c:    suspend(up->owner);
+look.c:    resume(up->owner);
+lzw.c:    up->zout = (struct lzw *) callocw(1,sizeof(struct lzw));
+lzw.c:    up->zin = (struct lzw *) callocw(1,sizeof(struct lzw));
+lzw.c:    up->zout->codebits = LZWBITS;
+lzw.c:        up->zout->maxbits = LZWBITS;
+lzw.c:        up->zout->maxbits = 16;
+lzw.c:        up->zout->maxbits = bits;
+lzw.c:    up->zout->nextbit = 0;
+lzw.c:    up->zout->prefix = -1;
+lzw.c:    up->zout->version = -1;
+lzw.c:    up->zout->code = -1;
+lzw.c:    up->zout->mode = mode;
+lzw.c:    up->zout->next = ZFLUSH + 1;    /* used only in LZWFAST mode */
+lzw.c:    up->zin->codebits = LZWBITS;
+lzw.c:    up->zin->maxbits = -1;
+lzw.c:    up->zin->nextbit = 0;
+lzw.c:    up->zin->prefix = -1;
+lzw.c:    up->zin->version = -1;
+lzw.c:    up->zin->code = -1;
+lzw.c:    up->zin->next = ZFLUSH + 1;
+lzw.c:    up->zin->mode = LZWCOMPACT;
+lzw.c:    up->zin->buf = NULLBUF;
+lzw.c:        if (up->type == TYPE_TCP && up->cb.tcb)
+lzw.c:            rxtx_data_compute(up->cb.tcb,&sent,&recvd);
+lzw.c:        if (up->zout != NULLLZW || up->zin != NULLLZW)
+lzw.c:    if(up->zout != NULLLZW) {
+lzw.c:        if (Lzwtrace && up->zout->cnt != 0L)
+lzw.c:                sent, up->zout->cnt,
+lzw.c:                (up->zout->cnt - sent)*100/up->zout->cnt);
+lzw.c:        cleartbl(up->zout);
+lzw.c:        free((char *)up->zout);
+lzw.c:        up->zout = NULLLZW;
+lzw.c:    if(up->zin != NULLLZW) {
+lzw.c:        if (Lzwtrace && up->zin->cnt != 0L)
+lzw.c:                recvd, up->zin->cnt, 
+lzw.c:                (up->zin->cnt - recvd)*100/up->zin->cnt);
+lzw.c:        cleartbl(up->zin);
+lzw.c:        free_q(&up->zin->buf);
+lzw.c:        free((char *)up->zin);
+lzw.c:        up->zin = NULLLZW;
+lzw.c:    lzw = up->zout;
+lzw.c:    code = up->zout->prefix;
+lzw.c:        up->obuf->data[up->obuf->cnt++] = lzw->version;
+lzw.c:        up->obuf->data[up->obuf->cnt++] = lzw->maxbits;
+lzw.c:        if(up->zout == NULLLZW) /* ...or is about to be closed */
+lzw.c:    register struct lzw *lzw = up->zout;
+lzw.c:    int32 code = up->zout->prefix;
+lzw.c:    if(up->zout->code != -1) {
+lzw.c:        up->obuf->data[up->obuf->cnt] =
+lzw.c:        up->zout->code >> up->zout->flushbit;
+lzw.c:        if(up->zout->flushbit + 8 >= up->zout->codebits) { /* done */
+lzw.c:            up->zout->nextbit = (up->zout->codebits -
+lzw.c:            up->zout->flushbit) % 8;
+lzw.c:            if(up->zout->nextbit == 0)
+lzw.c:                ++up->obuf->cnt;
+lzw.c:            up->zout->code = -1;
+lzw.c:            ++up->obuf->cnt;
+lzw.c:            up->zout->flushbit += 8;
+lzw.c:    if(up->zout->nextbit == 0) {
+lzw.c:            up->zout->flushbit = 0;
+lzw.c:            up->zout->code = ZFLUSH;
+lzw.c:        up->obuf->data[up->obuf->cnt++] = (char) code;
+lzw.c:        up->obuf->data[up->obuf->cnt++] |= code << up->zout->nextbit;
+lzw.c:        up->zout->flushbit = 8 - up->zout->nextbit;
+lzw.c:        up->zout->code = ZFLUSH;
+lzw.c:    up->obuf->data[up->obuf->cnt] = code >> (8 - up->zout->nextbit);
+lzw.c:    if(16 - up->zout->nextbit < up->zout->codebits)
+lzw.c:        up->obuf->data[++up->obuf->cnt] =
+lzw.c:        code >> (16 - up->zout->nextbit);
+lzw.c:    up->zout->nextbit = (up->zout->nextbit + up->zout->codebits) % 8;
+lzw.c:    if(up->zout->nextbit == 0)
+lzw.c:        ++up->obuf->cnt;
+lzw.c:    if(up->zout->prefix != -1) {
+lzw.c:        addtobuffer(up,up->zout->prefix);
+lzw.c:        if(up->zout->next + 1 == (int32) 1 << up->zout->codebits)
+lzw.c:            morebits(up->zout);
+lzw.c:        up->zout->prefix = -1;
+lzw.c:    if(up->zin->version == -1 && (up->zin->version = PULLCHAR(&up->ibuf))
+lzw.c:    if(up->zin->maxbits == -1) {
+lzw.c:        if((up->zin->maxbits = PULLCHAR(&up->ibuf)) == -1)
+lzw.c:        if(up->zout->maxbits > up->zin->maxbits) {
+lzw.c:            if(up->zout->codebits > up->zin->maxbits) {
+lzw.c:                addtobuffer(up,up->zout->prefix);
+lzw.c:                if(up->zout->next + 1 == (int32)
+lzw.c:                    1 << up->zout->codebits)
+lzw.c:                    morebits(up->zout);
+lzw.c:                cleartbl(up->zout);
+lzw.c:            up->zout->maxbits = up->zin->maxbits;
+lzw.c:        if((data = PULLCHAR(&up->zin->buf)) != -1)
+lzw.c:        decodetbl(code,up->zin);
+lzw.c:        up->zin->cnt += len_p(up->zin->buf);
+lzw.c:    if(up->zin->code == -1) {   /* read the first character */
+lzw.c:        if((code = PULLCHAR(&up->ibuf)) == -1)
+lzw.c:        up->zin->code = code >> up->zin->nextbit;
+lzw.c:    if(up->ibuf == NULLBUF)     /* next byte is not available yet */
+lzw.c:    up->zin->code |= ((int32) uchar(*up->ibuf->data) <<
+lzw.c:        (8 - up->zin->nextbit)) & (((int32) 1 <<
+lzw.c:        up->zin->codebits) - 1);
+lzw.c:    if(16 - up->zin->nextbit < up->zin->codebits) {
+lzw.c:        (void) PULLCHAR(&up->ibuf);
+lzw.c:        up->zin->nextbit -= 8; /* pull bits from a third byte */
+lzw.c:    code = up->zin->code;
+lzw.c:    up->zin->code = -1;
+lzw.c:    up->zin->nextbit = (up->zin->nextbit + up->zin->codebits) % 8;
+lzw.c:    if(up->zin->nextbit == 0)
+lzw.c:        (void) PULLCHAR(&up->ibuf);
+lzw.c:        cleartbl(up->zin);
+lzw.c:        up->zin->prefix = -1;
+mailbox.c:				if (up->cb.p == NULLCHAR)
+mailbox.c:                if ((flags=up->cb.ax25->iface->flags) & NO_AX25)
+mailbox.c:						strcpy(up->eol,"\r");  /* just CR */
+mailbox.c:        strcpy(up->eol,"\r" /*AX_EOL*/);  /* just CR */
+mailbox.c:    if(up->iface->flags & NO_AX25)
+mailbox.c:        c = up->refcnt;  /* remember current refcnt */
+mailbox.c:            while(up->refcnt != c)
+mboxcmd.c:				if(up->owner == up1->owner)
+mboxcmd.c:					switch(up->type)
+mboxgate.c:	    up->type == TYPE_AX25I /* || up->type == TYPE_AX25UI*/
+mboxgate.c:            up->type == TYPE_NETROML3 || up->type == TYPE_NETROML4
+mboxgate.c:        oldbl = up->noblock;
+mboxgate.c:        up->noblock = 1;
+mboxgate.c:        up->noblock = oldbl;
+mboxgate.c:        oldbl = up->noblock;
+mboxgate.c:        up->noblock = 1;
+mboxgate.c:        up->noblock = oldbl;
+mbuf.c:            cp->dup->refcnt++;
+sessmgr.c:    if ((up = itop(Curproc->output)) == NULLUSOCK || up->type != TYPE_WRITE_ONLY_FILE) {
+sessmgr.c:                switch(up->type) {
+sessmgr.c:                        struct tcb *tcb = up->cb.tcb;
+sessmgr.c:                        struct ax25_cb *axp = up->cb.ax25;
+sessmgr.c:                        struct nr4cb *cb = up->cb.nr4;
+smisc.c:                if(up && up->owner != NULLPROC) {
+smisc.c:                        if(up->owner->input == m->user) {
+sockcmd.c:            procname = up->owner->name;
+sockcmd.c:            s,Socktypes[(int)up->type],FP_SEG(up->cb.p),cp,
+sockcmd.c:            FP_SEG(up->owner),procname);
+sockcmd.c:    tprintf("%s %8.8lx %s",Socktypes[(int)up->type],FP_SEG(up->cb.p),
+sockcmd.c:    tprintf("%s %4.4x %s",Socktypes[up->type],FP_SEG(up->cb.p),
+sockcmd.c:    up->flag == SOCK_ASCII ? "ascii" : "binary");
+sockcmd.c:    if(up->eol[0] != '\0'){
+sockcmd.c:        for(i=0;up->eol[i] != '\0' && i<(int)sizeof(up->eol);i++)
+sockcmd.c:            tprintf(" %02x",up->eol[i]);
+sockcmd.c:    tprintf("  Refcnt: %d  Since: %s",up->refcnt,ctime(&up->created));
+sockcmd.c:    if(up->cb.p == NULL)
+sockcmd.c:    switch(up->type){
+sockcmd.c:            tprintf("File: %s\n", up->name);
+sockcmd.c:            st_tcp(up->cb.tcb);
+sockcmd.c:            st_udp(up->cb.udp,0);
+sockcmd.c:            st_ax25(up->cb.ax25);
+sockcmd.c:            donrdump(up->cb.nr4);
+sockcmd.c:    if(up->zout != NULLLZW)
+sockcmd.c:        tprintf("Compressed %d bytes.\n",up->zout->cnt);
+sockcmd.c:    if(up->zin != NULLLZW)
+sockcmd.c:        tprintf("Decompressed %d bytes.\n",up->zin->cnt);
+sockcmd.c:    if(up->type == TYPE_TCP)
+sockcmd.c:        retval = kick_tcp(up->cb.tcb);
+sockcmd.c:    if(up->type == TYPE_AX25I)
+sockcmd.c:        retval = kick_ax25(up->cb.ax25);
+sockcmd.c:    if(up->type == TYPE_NETROML4)
+sockcmd.c:        retval = kick_nr4(up->cb.nr4);
+socket.c:    up->created = time(NULL);
+socket.c:    up->refcnt = 1;
+socket.c:    s = up->number;
+socket.c:    up->look = NULLPROC;
+socket.c:    up->noblock = 0;
+socket.c:    up->rdysock = -1;
+socket.c:    up->cb.p = NULLCHAR;
+socket.c:    up->peername = up->name = NULLCHAR;
+socket.c:    up->namelen = up->peernamelen = 0;
+socket.c:    up->owner = Curproc;
+socket.c:    up->obuf = NULLBUF;
+socket.c:    memset(up->errcodes,0,sizeof(up->errcodes));
+socket.c:    memset(up->eol,0,sizeof(up->eol));
+socket.c:    up->flush = '\n';   /* default is line buffered */
+socket.c:                up->type = TYPE_WRITE_ONLY_FILE;
+socket.c:            up->cb.local = (struct loc *) callocw(1,sizeof(struct loc));
+socket.c:            up->cb.local->peer = up;    /* connect to self */
+socket.c:                up->type = TYPE_LOCAL_STREAM;
+socket.c:                up->cb.local->hiwat = LOCSFLOW;
+socket.c:                up->type = TYPE_LOCAL_DGRAM;
+socket.c:                up->cb.local->hiwat = LOCDFLOW;
+socket.c:                free(up->cb.local);
+socket.c:                up->type = TYPE_AX25I;
+socket.c:                up->type = TYPE_AX25UI;
+socket.c:            strcpy(up->eol,AX_EOL);
+socket.c:                up->type = TYPE_NETROML4;
+socket.c:            strcpy(up->eol,AX_EOL);
+socket.c:                up->type = TYPE_TCP;
+socket.c:                strcpy(up->eol,INET_EOL);
+socket.c:                up->type = TYPE_UDP;
+socket.c:                up->type = TYPE_RAW;
+socket.c:                up->cb.rip = raw_ip(protocol,rip_recv);
+socket.c:                up->cb.rip->user = s;
+socket.c:    up->cb.fp = fp;
+socket.c:    up->name = j2strdup(filename);
+socket.c:    up->namelen = strlen(up->name);
+socket.c:    sfp->filename = up->name;
+socket.c:    sfp->len = up->namelen;
+socket.c:    up->peername = (char *)sfp;
+socket.c:    up->peernamelen = sizeof(struct sockaddr_fp);
+socket.c:    up->cb.fp = stdout;
+socket.c:    up->name = j2strdup("stdout");
+socket.c:    up->namelen = strlen(up->name);
+socket.c:    sfp->filename = up->name;
+socket.c:    sfp->len = up->namelen;
+socket.c:    up->peername = (char *)sfp;
+socket.c:    up->peernamelen = sizeof(struct sockaddr_fp);
+socket.c:    if(up->type == TYPE_LOCAL_STREAM || up->type == TYPE_LOCAL_DGRAM){
+socket.c:    if(up->name != NULLCHAR){
+socket.c:    if(checkaddr(up->type,name,namelen) == -1){
+socket.c:    up->namelen = namelen;
+socket.c:    up->name = mallocw((unsigned)namelen);
+socket.c:    memcpy(up->name,name,(size_t)namelen);
+socket.c:    switch(up->type){
+socket.c:            local.in = (struct sockaddr_in *)up->name;
+socket.c:            if ((up->cb.udp = open_udp(&lsock,s_urcall)) == NULLUDP) {
+socket.c:            up->cb.udp->user = s;
+socket.c:    if(up->type == TYPE_LOCAL_STREAM || up->type == TYPE_LOCAL_DGRAM){
+socket.c:    if(up->cb.p != NULLCHAR){
+socket.c:    switch(up->type){
+socket.c:            if(up->name == NULLCHAR)
+socket.c:            local.in = (struct sockaddr_in *)up->name;
+socket.c:            up->cb.tcb = open_tcp(&lsock,NULLSOCK,
+socket.c:            if(up->name == NULLCHAR)
+socket.c:            local.ax = (struct sockaddr_ax *)up->name;
+socket.c:            up->cb.ax25 = open_ax25(NULLIF,local.ax->ax25_addr,NULLCHAR,
+socket.c:            if(up->name == NULLCHAR)
+socket.c:            local.nr = (struct sockaddr_nr *)up->name;
+socket.c:            up->cb.nr4 = open_nr4(&local.nr->nr_addr,NULLNRADDR,
+socket.c:    if(up->type == TYPE_LOCAL_DGRAM || up->type == TYPE_LOCAL_STREAM){
+socket.c:    if(checkaddr(up->type,peername,peernamelen) == -1){
+socket.c:    if(up->type != TYPE_RAW && up->type != TYPE_NETROML3 &&
+socket.c:    up->cb.p != NULLCHAR){
+socket.c:    up->peername = mallocw((unsigned)peernamelen);
+socket.c:    memcpy(up->peername,peername,(size_t)peernamelen);
+socket.c:    up->peernamelen = peernamelen;
+socket.c:    if(up->name == NULLCHAR){
+socket.c:        switch(up->type){
+socket.c:    switch(up->type){
+socket.c:            local.in = (struct sockaddr_in *)up->name;
+socket.c:            remote.in = (struct sockaddr_in *)up->peername;
+socket.c:            up->cb.tcb = open_tcp(&lsock,&fsock,TCP_ACTIVE,0,
+socket.c:            while((cb.tcb = up->cb.tcb) != NULLTCB && cb.tcb->state != TCP_ESTABLISHED){
+socket.c:                if(up->noblock){
+socket.c:                free(up->peername);
+socket.c:                up->peername = NULLCHAR;
+socket.c:            local.ax = (struct sockaddr_ax *)up->name;
+socket.c:            remote.ax = (struct sockaddr_ax *)up->peername;
+socket.c:            if((up->cb.ax25 = find_ax25(local.ax->ax25_addr, \
+socket.c:                && up->cb.ax25->state != LAPB_DISCONNECTED &&
+socket.c:            up->cb.ax25->user == -1) {
+socket.c:                up->cb.ax25->user = s;
+socket.c:                up->cb.ax25->r_upcall = s_arcall;
+socket.c:                up->cb.ax25->t_upcall = s_atcall;
+socket.c:                up->cb.ax25->s_upcall = s_ascall;
+socket.c:                if(up->cb.ax25->state == LAPB_CONNECTED
+socket.c:                    || up->cb.ax25->state == LAPB_RECOVERY)
+socket.c:                up->cb.ax25 = open_ax25(iface,local.ax->ax25_addr,
+socket.c:            while((cb.ax25 = up->cb.ax25) != NULLAX25 && cb.ax25->state != LAPB_CONNECTED){
+socket.c:                if(up->noblock){
+socket.c:                free(up->peername);
+socket.c:                up->peername = NULLCHAR;
+socket.c:            local.nr = (struct sockaddr_nr *)up->name;
+socket.c:            remote.nr = (struct sockaddr_nr *)up->peername;
+socket.c:            up->cb.nr4 = open_nr4(&local.nr->nr_addr,&remote.nr->nr_addr,
+socket.c:            while((cb.nr4 = up->cb.nr4) != NULLNR4CB && cb.nr4->state != NR4STCON){
+socket.c:                if(up->noblock){
+socket.c:                free(up->peername);
+socket.c:                up->peername = NULLCHAR;
+socket.c:    if(up->type == TYPE_LOCAL_DGRAM || up->type == TYPE_LOCAL_STREAM){
+socket.c:    if(up->cb.p == NULLCHAR){
+socket.c:    switch(up->type){
+socket.c:    while(up->cb.p != NULLCHAR && up->rdysock == -1){
+socket.c:        if(up->noblock){
+socket.c:    if(up->cb.p == NULLCHAR){
+socket.c:    i = up->rdysock;
+socket.c:    up->rdysock = -1;
+socket.c:        *peernamelen = min(up->peernamelen,*peernamelen);
+socket.c:        memcpy(peername,up->peername,(size_t)*peernamelen);
+socket.c:    up->created = time(NULL);
+socket.c:    if(up->ibuf != NULLBUF){
+socket.c:        cnt = len_p(up->ibuf);
+socket.c:            *bpp = up->ibuf;
+socket.c:            free_p(up->ibuf);
+socket.c:        up->ibuf = NULLBUF;
+socket.c:    switch(up->type){
+socket.c:            while(up->cb.local != NULLLOC && up->cb.local->q == NULLBUF
+socket.c:            && up->cb.local->peer != NULLUSOCK){
+socket.c:                if(up->noblock){
+socket.c:            if(up->cb.local == NULLLOC){
+socket.c:            if(up->cb.local->q == NULLBUF &&
+socket.c:            up->cb.local->peer == NULLUSOCK){
+socket.c:            bp = dequeue(&up->cb.local->q);
+socket.c:            if(up->cb.local->q == NULLBUF
+socket.c:                && (up->cb.local->flags & LOC_SHUTDOWN))
+socket.c:			    if(!tcpval(cb.tcb = up->cb.tcb))
+socket.c:            while((cb.udp = up->cb.udp) != NULLUDP
+socket.c:                if(up->noblock){
+socket.c:            while((cb.rip = up->cb.rip) != NULLRIP
+socket.c:                if(up->noblock){
+socket.c:            while((cb.ax25 = up->cb.ax25) != NULLAX25
+socket.c:                if(up->noblock){
+socket.c:            while((cb.rnr = up->cb.rnr) != NULLRNR
+socket.c:                if(up->noblock){
+socket.c:            while((cb.nr4 = up->cb.nr4) != NULLNR4CB
+socket.c:                if(up->noblock){
+socket.c:    if(up->obuf != NULLBUF){
+socket.c:         * Note the importance of clearing up->obuf
+socket.c:        bp1 = up->obuf;
+socket.c:        up->obuf = NULLBUF;
+socket.c:    if(up->name == NULLCHAR){
+socket.c:        switch(up->type){
+socket.c:    switch(up->type){
+socket.c:            FILE *fp = up->cb.fp;
+socket.c:            if(up->cb.local->peer == NULLUSOCK){
+socket.c:            enqueue(&up->cb.local->peer->cb.local->q,bp);
+socket.c:            j2psignal(up->cb.local->peer,0);
+socket.c:            while(up->cb.local->peer != NULLUSOCK &&
+socket.c:                len_q(up->cb.local->peer->cb.local->q) >=
+socket.c:            up->cb.local->peer->cb.local->hiwat){
+socket.c:                if(up->noblock){
+socket.c:                } else if((errno = pwait(up->cb.local->peer)) != 0){
+socket.c:            if(up->cb.local->peer == NULLUSOCK){
+socket.c:            if(up->cb.local->peer == NULLUSOCK){
+socket.c:            append(&up->cb.local->peer->cb.local->q,bp);
+socket.c:            j2psignal(up->cb.local->peer,0);
+socket.c:            while(up->cb.local->peer != NULLUSOCK &&
+socket.c:                len_p(up->cb.local->peer->cb.local->q) >=
+socket.c:            up->cb.local->peer->cb.local->hiwat){
+socket.c:                if(up->noblock){
+socket.c:                } else if((errno = pwait(up->cb.local->peer)) != 0){
+socket.c:            if(up->cb.local->peer == NULLUSOCK){
+socket.c:            if((cb.tcb = up->cb.tcb) == NULLTCB){
+socket.c:            while((cb.tcb = up->cb.tcb) != NULLTCB &&
+socket.c:                if(up->noblock){
+socket.c:            local.in = (struct sockaddr_in *)up->name;
+socket.c:            else if(up->peername != NULLCHAR)
+socket.c:                remote.in = (struct sockaddr_in *)up->peername;
+socket.c:            local.in = (struct sockaddr_in *)up->name;
+socket.c:            else if(up->peername != NULLCHAR)
+socket.c:                remote.in = (struct sockaddr_in *)up->peername;
+socket.c:            (char)up->cb.rip->protocol,0,0,bp,0,0,0);
+socket.c:            if((cb.ax25 = up->cb.ax25) == NULLAX25){
+socket.c:            while((cb.ax25 = up->cb.ax25) != NULLAX25 &&
+socket.c:                if(up->noblock){
+socket.c:            local.ax = (struct sockaddr_ax *)up->name;
+socket.c:            else if(up->peername != NULLCHAR)
+socket.c:                remote.ax = (struct sockaddr_ax *)up->peername;
+socket.c:            local.nr = (struct sockaddr_nr *)up->name;
+socket.c:            else if(up->peername != NULLCHAR)
+socket.c:                remote.nr = (struct sockaddr_nr *)up->peername;
+socket.c:            up->cb.rnr->protocol,up->cb.rnr->protocol,bp);
+socket.c:            if((cb.nr4 = up->cb.nr4) == NULLNR4CB) {
+socket.c:            while((cb.nr4 = up->cb.nr4) != NULLNR4CB &&
+socket.c:                if(up->noblock){
+socket.c:    if(up->name == NULLCHAR){
+socket.c:    if(up->name != NULLCHAR){
+socket.c:        *namelen = min(*namelen,up->namelen);
+socket.c:        memcpy(name,up->name,(size_t)*namelen);
+socket.c:    if(up->peername == NULLCHAR){
+socket.c:    *peernamelen = min(*peernamelen,up->peernamelen);
+socket.c:    memcpy(peername,up->peername,(size_t)*peernamelen);
+socket.c:    if(up->cb.p == NULLCHAR){
+socket.c:    switch(up->type){
+socket.c:                len = len_q(up->cb.local->q);
+socket.c:                if(up->cb.local->peer != NULLUSOCK)
+socket.c:                    len = len_q(up->cb.local->peer->cb.local->q);
+socket.c:                len = len_p(up->cb.local->q) + len_p(up->ibuf);
+socket.c:                if(up->cb.local->peer != NULLUSOCK)
+socket.c:                    len = len_p(up->cb.local->peer->cb.local->q)
+socket.c:                    + len_p(up->obuf);
+socket.c:                len = up->cb.tcb->rcvcnt + len_p(up->ibuf);
+socket.c:                len = up->cb.tcb->sndcnt + len_p(up->obuf);
+socket.c:                len = up->cb.udp->rcvcnt;
+socket.c:                len = len_p(up->cb.ax25->rxq) + len_p(up->ibuf);
+socket.c:                len = len_q(up->cb.ax25->txq);
+socket.c:                if(up->obuf != NULLBUF)
+socket.c:                len = len_q(up->cb.rnr->rcvq);
+socket.c:                len = len_p(up->cb.nr4->rxq) + len_p(up->ibuf);
+socket.c:                len = len_q(up->cb.nr4->txq);
+socket.c:                if(up->obuf != NULLBUF)
+socket.c:                len = len_q(up->cb.rip->rcvq);
+socket.c:    if(up->type == TYPE_LOCAL_STREAM || up->type == TYPE_LOCAL_DGRAM){
+socket.c:    if(up->cb.p == NULLCHAR){
+socket.c:    switch(up->type){
+socket.c:            kick_tcp(up->cb.tcb);
+socket.c:            kick_ax25(up->cb.ax25);
+socket.c:            kick_nr4(up->cb.nr4);
+socket.c:    pp = up->owner;
+socket.c:        up->owner = newowner;
+socket.c:    if(up->cb.p == NULLCHAR){
+socket.c:    switch(up->type){
+socket.c:            if(up->cb.local->q == NULLBUF)
+socket.c:                up->cb.local->flags = LOC_SHUTDOWN;
+socket.c:                up->cb.tcb->r_upcall = trdiscard;
+socket.c:                close_tcp(up->cb.tcb);
+socket.c:                reset_tcp(up->cb.tcb);
+socket.c:                up->cb.tcb = NULLTCB;
+socket.c:                disc_ax25(up->cb.ax25);
+socket.c:                reset_ax25(up->cb.ax25);
+socket.c:                up->cb.ax25 = NULLAX25;
+socket.c:                disc_nr4(up->cb.nr4);
+socket.c:                reset_nr4(up->cb.nr4);
+socket.c:                up->cb.nr4 = NULLNR4CB;
+socket.c:    if(--up->refcnt > 0)
+socket.c:    if(up->ibuf != NULLBUF){
+socket.c:        free_p(up->ibuf);
+socket.c:        up->ibuf = NULLBUF;
+socket.c:    switch(up->type){
+socket.c:            fclose(up->cb.fp);
+socket.c:            if(up->cb.local->peer != NULLUSOCK){
+socket.c:                up->cb.local->peer->cb.local->peer = NULLUSOCK;
+socket.c:                j2psignal(up->cb.local->peer,0);
+socket.c:            free_q(&up->cb.local->q);
+socket.c:            free(up->cb.local);
+socket.c:            if(up->cb.tcb != NULLTCB){  /* In case it's been reset */
+socket.c:                up->cb.tcb->r_upcall = trdiscard;
+socket.c:                up->cb.tcb->user = -1;
+socket.c:                close_tcp(up->cb.tcb);
+socket.c:            if(up->cb.udp != NULLUDP){
+socket.c:                del_udp(up->cb.udp);
+socket.c:            if(up->cb.ax25 != NULLAX25){
+socket.c:                up->cb.ax25->user = -1;
+socket.c:                disc_ax25(up->cb.ax25);
+socket.c:            if(up->cb.nr4 != NULLNR4CB){
+socket.c:                up->cb.nr4->user = -1;
+socket.c:                disc_nr4(up->cb.nr4);
+socket.c:            del_ip(up->cb.rip);
+socket.c:    if(up->zout != NULLLZW || up->zin != NULLLZW)
+socket.c:    free(up->name);
+socket.c:    free(up->peername);
+socket.c:    if(up->look)    /* Alert the process looking at us */
+socket.c:        alert(up->look,ENOTCONN);
+socket.c:    up->refcnt++;
+socket.c:        if(up != NULLUSOCK && up->owner == pp) {
+socket.c:                up->cb.tcb = NULLTCB;
+socket.c:                up->errcodes[0] = tcb->reason;
+socket.c:                up->errcodes[1] = tcb->type;
+socket.c:                up->errcodes[2] = tcb->code;
+socket.c:                next = nup->next;
+socket.c:                nup->next = next;
+socket.c:                nup->number = ns;
+socket.c:                nup->cb.tcb = tcb;
+socket.c:                nup->name = mallocw(SOCKSIZE);
+socket.c:                nup->peername = mallocw(SOCKSIZE);
+socket.c:                up->rdysock = ns;
+socket.c:                up->peername = mallocw(SOCKSIZE);
+socket.c:                up->rdysock = s;
+socket.c:            sp.p = up->name;
+socket.c:            sp.in->sin_addr.s_addr = up->cb.tcb->conn.local.address;
+socket.c:            sp.in->sin_port = up->cb.tcb->conn.local.port;
+socket.c:            up->namelen = SOCKSIZE;
+socket.c:            sp.p = up->peername;
+socket.c:            sp.in->sin_addr.s_addr = up->cb.tcb->conn.remote.address;
+socket.c:            sp.in->sin_port = up->cb.tcb->conn.remote.port;
+socket.c:            up->peernamelen = SOCKSIZE;
+socket.c:        axp->t_upcall = up->cb.ax25->t_upcall;
+socket.c:        axp->r_upcall = up->cb.ax25->r_upcall;
+socket.c:        axp->s_upcall = up->cb.ax25->s_upcall;
+socket.c:        if (up->cb.ax25->flags.clone) {
+socket.c:            next = nup->next;
+socket.c:            nup->next = next;
+socket.c:            nup->number = ns;
+socket.c:            nup->cb.ax25 = axp;
+socket.c:            nup->name = mallocw(sizeof(struct sockaddr_ax));
+socket.c:            nup->peername = mallocw(sizeof(struct sockaddr_ax));
+socket.c:            up->rdysock = ns;
+socket.c:            del_ax25(up->cb.ax25);
+socket.c:            up->cb.ax25 = axp;
+socket.c:            up->peername = mallocw(sizeof(struct sockaddr_ax));
+socket.c:            up->rdysock = Axi_sock;
+socket.c:        sp.p = up->name;
+socket.c:        up->namelen = sizeof(struct sockaddr_ax);
+socket.c:        sp.p = up->peername;
+socket.c:        up->peernamelen = sizeof(struct sockaddr_ax);
+socket.c:                up->errcodes[0] = axp->reason;
+socket.c:                up->cb.ax25 = NULLAX25;
+socket.c:        up->cb.nr4 = NULLNR4CB;
+socket.c:        up->errcodes[0] = cb->dreason;
+socket.c:            next = nup->next;
+socket.c:            nup->next = next;
+socket.c:            nup->number = ns;
+socket.c:            nup->cb.nr4 = cb;
+socket.c:            nup->name = mallocw(sizeof(struct sockaddr_nr));
+socket.c:            nup->peername = mallocw(sizeof(struct sockaddr_nr));
+socket.c:            up->rdysock = ns;
+socket.c:            up->peername = mallocw(sizeof(struct sockaddr_nr));
+socket.c:            up->rdysock = s;
+socket.c:        sp.p = up->name;
+socket.c:        ASSIGN(sp.nr->nr_addr,up->cb.nr4->local);
+socket.c:        up->namelen = sizeof(struct sockaddr_nr);
+socket.c:        sp.p = up->peername;
+socket.c:        ASSIGN(sp.nr->nr_addr,up->cb.nr4->remote);
+socket.c:        up->peernamelen = sizeof(struct sockaddr_nr);
+socket.c:    up->peernamelen = SOCKSIZE;
+socket.c:    up->peername = mallocw((unsigned)up->peernamelen);
+socket.c:    memcpy(up->peername,(char *)&sock,SOCKSIZE);
+socket.c:    up->cb.tcb = tcb;
+socket.c:        for(up=Usock;up->next;up=up->next);
+socket.c:        new->number = up->number + 1;
+socket.c:        up->next = new;
+socket.c:    for(pp=NULL,up=Usock;up;pp=up,up=up->next)
+socket.c:        if(up->number == s)
+socket.c:        pp->next = up->next;
+socket.c:    for(up=Usock;up;up=up->next)
+socket.c:		if (up->next == up)
+socket.c:        if(up->number == s)
+socket.c:    for(up=Usock;up;up=up->next)
+socket.c:        if(up->number > s)
+socket.c:        return up->number;
+sockuser.c:    if(c == '\n' && (up->flag & SOCK_ASCII)){
+sockuser.c:        len = strlen(up->eol);
+sockuser.c:    if((bp = up->obuf) != NULLBUF){
+sockuser.c:    if(up->obuf == NULLBUF){
+sockuser.c:        up->obuf = ambufw(BUFSIZ);
+sockuser.c:    bp = up->obuf;
+sockuser.c:        for(cp = up->eol;*cp != '\0';cp++)
+sockuser.c:            if(up->zout == NULLLZW)
+sockuser.c:        strncpy(cp,up->eol,(unsigned)len);
+sockuser.c:        if(up->zout == NULLLZW)
+sockuser.c:if((c == up->flush && up->flush != -1) || bp->cnt >= bp->size-9)
+sockuser.c:if(up->look)    /* Some one is looking at us ! */
+sockuser.c:    usputc(up->look->output,c);
+sockuser.c:    if(up->zout != NULLLZW){
+sockuser.c: *       if(up->look)
+sockuser.c: *           usputs(up->look->output,oldbuf);
+sockuser.c:    ascii = up->flag & SOCK_ASCII;
+sockuser.c:        eol_len = strlen(up->eol);
+sockuser.c:    doflush = (up->flush != -1) && (strchr(buf,up->flush) != NULLCHAR);
+sockuser.c:        if(up->obuf == NULLBUF){
+sockuser.c:            up->obuf = ambufw(clen);
+sockuser.c:        bp = up->obuf;
+sockuser.c:            strncpy(wp,up->eol,(size_t)eol_len);
+sockuser.c:    if(up->look)        /* someone is looking at us ! */
+sockuser.c:        usputs(up->look->output,oldbuf);
+sockuser.c:    if(up->zin != NULLLZW)
+sockuser.c:    if(up->ibuf == NULLBUF && recv_mbuf(s,&up->ibuf,0,NULLCHAR,0) <= 0)
+sockuser.c:    if(up->zin != NULLLZW)
+sockuser.c:    return PULLCHAR(&up->ibuf); /* Returns -1 if eof */
+sockuser.c:    if(c != up->eol[0] || !(up->flag & SOCK_ASCII)) {
+sockuser.c:        if(c!=EOF && up->look)
+sockuser.c:            usputc(up->look->output,c);
+sockuser.c:    if(up->eol[1] != '\0'){
+sockuser.c:    if(up->look) {
+sockuser.c:        usputc(up->look->output,'\n');
+sockuser.c:        usflush(up->look->output);
+sockuser.c:    if(up->obuf != NULLBUF){
+sockuser.c:        if(up->zout != NULLLZW)
+sockuser.c:        bp = up->obuf;
+sockuser.c:        up->obuf = NULLBUF;
+sockuser.c:    if(up->look)    /* Some one is looking at us, flush them as well */
+sockuser.c:        usflush(up->look->output);
+sockuser.c:        strncpy(up->eol,seq,sizeof(up->eol));
+sockuser.c:        *up->eol = '\0';
+sockuser.c:    prev = up->flag;
+sockuser.c:            up->flag = mode;
+sockuser.c:    old = up->flush;
+sockuser.c:    up->flush = c;
+sockuser.c:    oldval = up->noblock;
+sockuser.c:    up->noblock = value;
+sockutil.c:    switch(up->type){
+sockutil.c:            if(up->cb.ax25 != NULLAX25)
+sockutil.c:            return Axreasons[(int)up->errcodes[0]];
+sockutil.c:            if(up->cb.nr4 != NULLNR4CB)
+sockutil.c:            return Nr4reasons[(int)up->errcodes[0]];
+sockutil.c:            if(up->cb.tcb != NULLTCB)
+sockutil.c:            return Tcpreasons[(int)up->errcodes[0]];
+sockutil.c:    if(up->cb.p == NULLCHAR){
+sockutil.c:    switch(up->type){
+sockutil.c:            return Tcpstates[(int)up->cb.tcb->state];
+sockutil.c:            return Ax25states[up->cb.ax25->state];
+sockutil.c:            return Nr4states[up->cb.nr4->state];
+sockutil.c:        if(up->type == TYPE_LOCAL_STREAM)
+sockutil.c:            mbuf_crunch(&up->cb.local->q);
+trace.c:		fflush (up->cb.fp);	/* now flush the actual OS buffers */
+udp.c:    up->socket.address = lsocket->address;
+udp.c:    up->socket.port = lsocket->port;
+udp.c:    up->r_upcall = r_upcall;
+udp.c:    up->next = Udps;
+udp.c:    if(up->rcvcnt == 0){
+udp.c:    buf = dequeue(&up->rcvq);
+udp.c:    up->rcvcnt--;
+udp.c:    for(up = Udps;up != NULLUDP;udplast = up,up = up->next){
+udp.c:        udplast->next = up->next;
+udp.c:        Udps = up->next;    /* was first on list */
+udp.c:    free_q(&up->rcvq);
+udp.c:    enqueue(&up->rcvq,packet);
+udp.c:    up->rcvcnt++;
+udp.c:    if(up->r_upcall)
+udp.c:        (*up->r_upcall)(iface,up,up->rcvcnt);
+udp.c:    for(up = Udps;up != NULLUDP;uplast = up,up = up->next){
+udp.c:        if(socket->port == up->socket.port
+udp.c:            && (socket->address == up->socket.address
+udp.c:        || up->socket.address == INADDR_ANY)){
+udp.c:                uplast->next = up->next;
+udp.c:                up->next = Udps;

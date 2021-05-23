@@ -1,0 +1,21 @@
+ve4klm@sith:~/official/jnos2$ rlog -R -L RCS/*
+RCS/asy.c,v
+RCS/ax25.c,v
+RCS/config.c,v
+RCS/config.h.default,v
+RCS/curses.c,v
+RCS/files.c,v
+RCS/mailbox.c,v
+RCS/makefile,v
+RCS/mboxfile.c,v
+RCS/mboxmail.c,v
+RCS/newinp.c,v
+RCS/nr3.c,v
+RCS/nrcmd.c,v
+RCS/nrdump.c,v
+RCS/smtpcli.c,v
+RCS/smtpserv.c,v
+RCS/snmpd.c,v
+RCS/ttydriv.c,v
+RCS/version.c,v
+

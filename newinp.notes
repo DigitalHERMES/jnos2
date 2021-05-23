@@ -1,0 +1,868 @@
+/*
+ * New INP support, continuing from work I started 6 years ago
+ *
+ * Note : use 'set ts=4' if using the VI(M) editor ...
+ *
+ * August 2011, by Maiko Langelaar (VE4KLM)
+ *
+ * By end of 20Aug2011, I have L3RTT going both ways, no more crashing,
+ * turns out the nrdump code that displays the RIF stuff is buggy, need
+ * to fix it, commented out for now. Next step is to do something with
+ * the RTT value, right now messages are just passed, nothing done with
+ * actual data.
+ *
+ * 21Aug2011, Maiko (VE4KLM), new inp_rif_recv() seems to work nicely,
+ * just have to use the data now and adjust node tables, and so on.
+ *
+ * 22Aug2011, Maiko (VE4KLM), basic update nrnbr table with rtt, and
+ * include INP stuff in the netrom.h structures, donrneighbour now shows
+ * the INP flag and rtt value, cleaned up formatting a bit (with Irtt).
+ *
+ * Interesting note, my ALIAS for my Xrouter partner is not defined, so I
+ * think what this means is that if INP is active, the remote side no longer
+ * uses conventional netrom broadcasts to send out info, it's all RIFS now,
+ * should confirm that via the traces, but that's what it looks like. If you
+ * think about it, it would be a big waste of bandwidth to have both systems
+ * running. See the next paragraph below (post note) which confirms this.
+ *
+ * 24Aug2011, Maiko, Seeing alot of 'not in our node table' log entries, and
+ * I don't see any NODES broadcasts coming from my Xrouter neighbour, who is
+ * actually VE2PKT-4 (Jean) - guess that means I'll have to add nodes as well
+ * for incoming RIFS - regular netrom broadcasts do not seem to be used when
+ * running INP mode (if I can word it that way). That seems to be the case.
+ * Also I have noticed later on that the ALIAS was filled in for my Xrouter
+ * neighbour (running INP) yet I see no netrom broadcast from him. That is
+ * because it was filled in by other partners I have who are running regular
+ * netrom systems. That explains the missing ALIAS part. Anyways, bottom line
+ * is I have to add nodes if they are not in my tables when RIF comes in, as
+ * well as add routes (also seeing alot of 'no route via this neighbour).
+ *
+ * Oops saw a netrom broadcast after 1 hour (that seems a long time), so maybe
+ * because I have yet to send him any RIFs he will label me as non-INP and do
+ * the broadcasts. That's all I can deduct right now, and there are still alot
+ * of missing route or missing node in our table messages - anyways, enough !
+ *
+ * 23Aug2011, I now process incoming RIF/RIP entries and manipulate the netrom
+ * memory structures, so technically I think this part is done, incoming RIF
+ * messages should now auto update the nodes table with new quality values,
+ * hops, and transport times. The only outstanding thing I have to work on
+ * with regard to incoming RIF messages now is NEGATIVE node information,
+ * something I need to first better educate myself on before I pursue it.
+ *
+ * 24Aug2011, Okay, technically I'm done processing RIF/RIP frames, I have
+ * it so that the node tables are now updated for each incoming RIF/RIP, just
+ * a matter of doing some fine tuning, and probably correcting the odd mistake
+ * here and there. Next step is to get us to transmit RIF/RIP frames to our
+ * neighbours. Oh yeah, so far, there is no 'negative node' processing.
+ *
+ * Outstanding - alias is not always sent in RIF, add_nrroute() should not
+ * be called if alias is not set or corrupt, alias should be overwritten to
+ * when subsequent RIF with alias appears (it is not). Also, ip address is
+ * not being parsed out properly (it's actually a.b.c.d, not the usual int
+ * format from netuser.c - All of this is now fixed (see below notes).
+ *
+ * 25Aug2011, Maiko, now checking for corrupt alias in RIP entries, as well
+ * as NO alias in RIP entries, one *can't* add a route if there is no alias,
+ * fixed up ip address parsing, and we MUST space pad alias. Somewhere also
+ * it says it should be all uppercase, so let's do that as well.
+ *
+ * Side note : not sure what that does for the lower case alias I see from
+ * time to time showing up in my nodes list (xnet stations I think). Keep an
+ * eye on this, see if anyone complains about it - spec says uppercase !
+ *
+ * Added the (minimum allowed) quality check against 'Nr_autofloor' - done.
+ *
+ * 26Aug2011, Guess I should update quality values on every L3RTT response, I
+ * can now confirm that part is working quite well. When I list a particular
+ * node after getting a response to an l3rtt request, I see the code is indeed
+ * updating the quality value of the node if rtt of the neighbour has changed.
+ *
+ * 28Aug2011, Maiko, Even if we don't get an alias from a RIF, we should add
+ * the route anyways, using a temporary alias, like '##TEMP'. This is how the
+ * original nr_routeadd() function in nr3.c does it. Why deny the ability to
+ * connect to a remote node that we don't know the alias for ? One can still
+ * connect to the node, so just add the darn route - don't ignore it like I was
+ * doing before today. Also, if a node route is in our tables, and it's using
+ * a temporary alias, we will now update it if one is present in the RIF. And
+ * lastly, I've decided to delete BINDINGS for low quality incoming RIFS now,
+ * instead of ignoring the RIF like I was doing before. No point having routes
+ * to nodes that have massive hop and tt numbers, we'll never reach them.
+ */
+
+#include <ctype.h>
+
+#include "global.h"
+
+#if defined (NETROM) && defined (INP2011)
+
+#include "ax25.h"
+
+#include <sys/time.h>
+
+#include "mbuf.h"
+#include "netrom.h"
+
+#ifndef OPTIONAL
+#define OPTIONAL
+#endif
+
+#define L3RTT_INTERVAL	300000	/* 5 minutes (5 x 60 x 1000) */
+#define	TT_HORIZON 6000
+#define	NR_INFO 0x05
+
+/* Define INP state constants */
+
+enum {
+	NR_INP_STATE_0,		/* Not recognized as an INP neighbour */
+	NR_INP_STATE_RTT,	/* Got RTT back, but no RIPs yet... */
+	NR_INP_STATE_INP,	/* Recognized as a full INP neighbour */
+};
+
+struct timer INPtimer;
+
+static char L3RTTcall[AXALEN] = {
+    'L' << 1, '3' << 1, 'R' << 1, 'T' << 1, 'T' << 1, ' ' << 1, '0' << 1
+};
+
+static int INP_active = 0;
+
+extern char Nralias[];
+
+extern unsigned Nr_maxroutes;
+
+extern struct nr_bind *find_bind (struct nr_bind*, struct nrnbr_tab*);
+
+/* 28Aug2011, Maiko (VE4KLM), function prototypes are important here */
+extern struct nrroute_tab *add_nrroute (char*, char*);
+extern struct nr_bind *add_binding (struct nrnbr_tab*, struct nrroute_tab*);
+
+/* 23Aug2011, Maiko (VE4KLM), needed to process incoming RIP, from orig code */
+
+static int rtt2qual (int rtt, int hops)
+{
+	int qual;
+
+	if (rtt >= TT_HORIZON)
+		return 0;
+
+	if (hops >= 255)
+		return 0;
+	
+	qual = 254 - (rtt / 20);
+
+	if (qual > 256 - hops)
+		qual = 254 - hops;
+
+	if (qual < 1)
+		qual = 0;
+
+	return qual;
+}
+
+/* 21Aug2011, Maiko (VE4KLM), new version of RIF/RIP receive function,
+ * by evening it seems to be working quite nicely, just have to adjust
+ * a few items (ie, how things are logged). Next step is to use the data
+ * contained in the RIF/RIP entries to adjust node tables, etc ...
+ *
+ * 23Aug2011, Maiko (VE4KLM), basic update of node tables from RIF frames
+ * is technically complete, just need to look at negative node stuff now,
+ * which I am not familiar with yet, need to read up on that first. I've
+ * decided for now to just find NR neighbour ONCE (see below), see how
+ * stable INP code is and then make a decision further down the road.
+ */
+
+int inp_rif_recv (struct mbuf *bp, struct ax25_cb *ax25)
+{
+	unsigned char nr_data[300], *dptr;	/* pullup & unsigned vars, grrr */
+
+	int quality, transportime, hops, dlen;
+	char nodecall[AXALEN], tmp[AXBUF];
+	int opt_field_len, opt_field_type;
+#ifndef	USE_NR_ROUTEADD
+	struct nrroute_tab *nr_node;
+#endif
+	struct nrnbr_tab *nr_neigh;
+	char logdata[100], *lptr;
+	struct nr_bind *nrbp;
+
+	int alias_corrupt;	/* 25Aug2011, Maiko, More alias protection systems */
+
+	char alias[ALEN+1]; /* 25Aug2011, Maiko, Use ALEN, add 1 for terminator */
+
+	dlen = len_p (bp) - 1;	/* skip 0xff */
+
+	dptr = nr_data + 1;		/* skip 0xff */
+
+ 	/* read all of it, 300 is just a max */
+	pullup (&bp, (unsigned char*)nr_data, 300);
+
+	/*
+	 * 27Aug2011, Maiko (VE4KLM), Interesting, just like back in 05Nov2005 in
+	 * my original attempt to do the INP stuff, why is it for only Xnet traffic
+	 * that the PTR to ax25 becomes NULL and crashes the damn system ?
+	 *
+	 * Okay, after looking at the trace data it would appear that Xnet sends
+	 * us TWO (2) identical netrom node broadcasts one after the other, the
+	 * first one to NODES, the second one to VE4KLM-3 (JNOS netrom call). I
+	 * think JNOS treats the second one like it is not a multicast (it has no
+	 * way of knowing actually), and tries to pass it through as a connected
+	 * netrom circuit which there is no level 2 connection for, so we get
+	 * the NULL ptr situation. I'm pretty certain of this now, just need
+	 * to fix it somehow. The fix below works, nothing is lost, and the
+	 * system is stable for now.
+	 *
+	 * I am now showing INP for my new I0OJSS xnet neighbour (Gustavo) ...
+ 	 *
+	 */
+
+	/* 05Nov2005, Maiko, gdb (debugger) is showing NULL value for ax25 ptr */
+	if (ax25 == NULL)
+	{
+		if (Nr_debug)
+			log (-1, "rif_recv - NULL ax25 - probably Xnet broadcast to non multicast");
+		return 0;
+	}
+
+	if ((nr_neigh = find_nrnbr (ax25->remote, ax25->iface)) == NULLNTAB)
+	{
+		if (Nr_debug)
+		{
+			log (-1, "add neighbor [%s] port [%s]",
+				pax25 (tmp, ax25->remote), ax25->iface->name);
+		}
+
+		/* 24Aug2011, Maiko, New function separated out in nr3.c */
+		if ((nr_neigh = add_nrnbr (ax25->remote, ax25->iface)) == NULLNTAB)
+		{
+			if (Nr_debug)
+			{
+				log (-1, "node [%s] port [%s] add_nrnbr failed",
+					pax25 (tmp, ax25->remote), ax25->iface->name);
+			}
+			return 0;
+		}
+	}
+
+	while (dlen > 0)
+	{
+		memcpy (nodecall, dptr, AXALEN);
+		dptr += AXALEN;
+		hops = *dptr++;
+		transportime = (*dptr++ << 8);
+		transportime += *dptr++;
+		dlen = dlen - AXALEN - 3;
+
+		alias_corrupt = 0;	/* 25Aug2011, Maiko, Assume alias will be fine */
+
+		*alias = 0;		/* 25Aug2011, Maiko, very important for alias check */
+
+		if (Nr_debug)
+		{
+			lptr = logdata;	/* important */
+
+			lptr += sprintf (lptr, "[%s] hops [%d] tt [%d]",
+				pax25 (tmp, nodecall), hops, transportime);
+		}
+
+		while (1)
+		{
+			opt_field_len = *dptr++;
+			dlen--;
+
+			if (!opt_field_len)
+				break;
+
+			opt_field_type = *dptr++;
+			dlen--;
+
+			opt_field_len -= 2;
+
+			switch (opt_field_type)
+			{
+				case 0:
+					if (Nr_debug)
+					{
+						/* 25Aug2011, Maiko, Alias must be space padded */
+						int tlen = opt_field_len, plen = ALEN - tlen;
+
+						char *aptr = alias, *tptr = dptr;
+				/*
+				 * 21Aug2011, Maiko, noticing corrupt alias values from time
+				 * to time, which locks up any 'tail -f' of log file, better
+				 * screen for non printables, and just replace those values
+				 * with '?' instead to prevent this from happening - done.
+				 * 24Aug2011, Maiko, need alias for route add later on.
+				 */
+						while (tlen > 0)
+						{
+							if (isprint (*tptr))
+								*aptr = *tptr;
+							else
+							{
+								*aptr = '?';
+
+								/*
+								 * 25Aug2011, Maiko, I still want to log this,
+								 * however we have to enforce the fact that the
+								 * alias is now corrupt, and no route added.
+								 */
+
+								alias_corrupt = 1;
+							}
+
+							tptr++;
+							aptr++;
+							tlen--;
+						}
+
+						/* 25Aug2011, Maiko, Alias must be space padded */
+						while (plen > 0)
+						{
+							*aptr = ' ';
+							aptr++;
+							plen--;
+						}
+
+						*aptr = 0;
+
+						/* 25Aug2011, Maiko, Lastly, upcase it !!! */
+						strupr (alias);
+
+						lptr += sprintf (lptr, " alias [%s]", alias);
+					}
+					break;
+
+				case 1:
+					if (Nr_debug)
+					{
+						/* 25Aug2011, Maiko, ip address is straight forward */
+						lptr += sprintf (lptr, " ip [%u.%u.%u.%u/%u]", *dptr,
+							*(dptr+1), *(dptr+2), *(dptr+3), *(dptr+4));
+						/*
+						lptr += sprintf (lptr, " ip [%.15s]",
+							inet_ntoa ((int32)(*dptr)));
+						*/
+					}
+					break;
+
+				default:
+					if (Nr_debug)
+						log (-1, "field type (%d) unknown", opt_field_type);
+					break;
+			}
+
+			dptr += opt_field_len;
+
+			dlen -= opt_field_len;
+		}
+
+		if (Nr_debug)
+			log (-1, "rif %s", logdata);
+
+		nr_neigh->inp_state = NR_INP_STATE_INP;	/* rifs means active INP */
+
+		/* 25Aug2011, Maiko, A corrupt alias means STOP, get next RIP info */
+		if (*alias && alias_corrupt)
+		{
+			if (Nr_debug)
+				log (-1, "ignore corrupt alias");
+
+			continue;
+		}
+
+		/* are we over the horizon ? */
+
+		if (transportime + nr_neigh->rtt > TT_HORIZON || hops == 255)
+			transportime = TT_HORIZON;
+
+		quality = rtt2qual (nr_neigh->rtt + transportime, hops);
+
+		/* 28Aug2011, Maiko, Okay, lets drop routes on low quality, instead
+		 * of just ignoring them, I think that's a cleaner approach, and alot
+		 * more realtime in nature, the whole point of the RIF system is to
+		 * have quick and dynamic route changes.
+		 *
+		 * 29Aug2011, Maiko, Something strange going on, tons of requests
+		 * for l3rtt coming from xrouter now, coincidence ? Maybe go back
+		 * to ignoring to see if this is the problem, fine before. Nope, it
+		 * would appear that Xrouter is still doing it from time to time,
+		 * posted to yahoo groups, see what they have to say about this,
+		 * so let's once again reinstate the dropping of routes.
+		 */
+
+#define	DROP_LOW_QUAL_ROUTES	/* 29Aug2011 */
+
+#ifndef	DROP_LOW_QUAL_ROUTES
+
+		/* 25Aug2011, ignore routes below the minimum quality threshhold */
+		if (quality < Nr_autofloor)
+		{
+			/*
+			 * 28Aug2011, Maiko, I wonder if we should actually let it go
+			 * to the point where if we find a BINDING, then drop the route
+			 * at that stage (drop the binding via this neighbour). I think
+			 * that's how the INP spec actually reads come to think of it.
+			 * TODO
+			 */
+			if (Nr_debug)
+				log (-1, "ignore low quality");
+
+			continue;
+		}
+#endif
+
+		/*
+		 * 24Aug2011, Maiko (VE4KLM), I want to try something different and
+		 * avoid using nr_routeadd() simply because it contains an extra call
+		 * to find_nrnbr() which I already did earlier on in this function.
+		 *
+		 * That just creates more work for the CPU, although maybe I am being
+		 * too picky about this, but I have more control on what I can do now.
+		 *
+		nrbp = nr_routeadd (alias, nodecall, ax25->iface,
+			quality, nr_neigh->call, 0, 0);
+		 *
+		 */
+
+		/* get the node entry for this particular RIP record */
+		if ((nr_node = find_nrroute (nodecall)) == NULLNRRTAB)
+		{
+			/* 28Aug2011, Maiko, No point adding a low quality node */
+			if (quality < Nr_autofloor)
+			{
+				if (Nr_debug)
+				{
+					log (-1, "do not add node [%s] low quality",
+						pax25 (tmp, nodecall));
+				}
+				continue;
+			}
+
+			/* 25Aug2011, Maiko, can't add route if we don't have an alias */
+			if (!(*alias))
+			{
+				/* 28Aug2011, Maiko, Add route as a ##TEMP alias instead */
+				if (Nr_debug)
+				{
+					log (-1, "add node [%s] temporary alias",
+						pax25 (tmp, nodecall));
+				}
+				strcpy (alias, "##TEMP");
+			}
+			else if (Nr_debug)
+			{
+				log (-1, "add node [%s]", pax25 (tmp, nodecall));
+			}
+
+			/* 24Aug2011, Maiko, New function separated out in nr3.c */
+			if ((nr_node = add_nrroute (alias, nodecall)) == NULLNRRTAB)
+			{
+				if (Nr_debug)
+				{
+					log (-1, "node [%s] add_nrroute failed",
+						pax25 (tmp, nodecall));
+				}
+				continue;
+			}
+		}
+		else if (*alias && !strnicmp (nr_node->alias, "##TEMP", 6))
+		{
+			/* 28Aug2011, Maiko, update alias if it was a ##TEMP entry */
+			if (Nr_debug)
+			{
+				log (-1, "update node [%s] new alias [%s]",
+					pax25 (tmp, nodecall), alias);
+			}
+
+			strncpy (nr_node->alias, alias, 6);
+		}
+
+	 	/* find the route that binds the node to current neighbour */
+		if ((nrbp = find_bind (nr_node->routes, nr_neigh)) == NULLNRBIND)
+		{
+			/* 28Aug2011, Maiko, No point binding a low quality node */
+			if (quality < Nr_autofloor)
+			{
+				if (Nr_debug)
+				{
+					log (-1, "do not bind node [%s] low quality",
+						pax25 (tmp, nodecall));
+				}
+				continue;
+			}
+
+			if (Nr_debug)
+			{
+				log (-1, "add binding to node [%s] via this neighbour",
+					pax25 (tmp, nodecall));
+			}
+
+			/* 24Aug2011, Maiko, New function separated out in nr3.c */
+			if ((nrbp = add_binding (nr_neigh, nr_node)) == NULLNRBIND)
+			{
+				if (Nr_debug)
+				{
+					log (-1, "node [%s] add_binding failed",
+						pax25 (tmp, nodecall));
+				}
+				continue;
+			}
+		}
+
+		/* 24Aug2011, Maiko (VE4KLM), nr_routeadd() checks if we have too
+		 * many bindings, we should probably do the same, out of curiosity
+		 * for now I am just going to log a warning, too see how often it
+		 * happens ... 
+		 */
+		if (nr_node->num_routes > Nr_maxroutes)
+			log (-1, "WARNING : Nr_maxroutes (%d) exceeded", Nr_maxroutes);
+
+		/* 28Aug2011, Maiko, If quality is low, then drop this route */
+		if (quality < Nr_autofloor)
+		{
+			if (Nr_debug)
+			{
+				log (-1, "drop low quality binding for node [%s]",
+					pax25 (tmp, nodecall));
+			}
+
+			/* 28Aug2011, Maiko, Comment here, I may split out the find_XXX
+			 * calls within nr_routedrop() in nr3.c. I just need the *last*
+			 * part of the function. Using the full nr_routedrop() again uses
+			 * up unnecessary CPU since I already have the node, binding, and
+			 * neighbour memory structures (see above find_XXX calls). Done!
+			 *
+			if (nr_routedrop (nodecall, nrbp->via->call, nrbp->via->iface))
+				log (-1, "rif_recv - nr_routedrop failed");
+			 */
+		
+			/* 28Aug2011, Maiko, new function (more efficient this way) */	
+			nr_routedrop_postread (nodecall, nrbp->via->call,
+				nr_node, nr_neigh, nrbp);
+
+			continue;
+		}
+
+		if (Nr_debug)
+		{
+			log (-1, "update (old/new) tt %d/%d hops %d/%d qual %d/%d",
+				nrbp->tt, transportime, nrbp->hops, hops,
+					nrbp->quality, quality);
+		}
+
+		nrbp->tt = transportime;
+		nrbp->hops = hops;
+		nrbp->quality = quality;
+	}
+
+	return 1;
+}
+
+/* 18/19 August 2011 */
+
+int inp_l3rtt (char *dest)
+{
+	/* 21Aug2011, Maiko, If INP timer is off, don't process incoming L3RTT */
+	return (INP_active && addreq (L3RTTcall, dest));
+}
+
+/*
+ * 18/19Aug2011, Maiko, revamped from the original 2005 version,
+ *
+ * 21Aug2011, Maiko, payload size tune up, next step - use RTT value.
+ *
+ * 22Aug2011, Maiko, Let's do this netrom table by table, so first let's
+ * get all the changes made that utilized the nrnbr_tab structure. The 2nd
+ * parameter is no longer 'remote', it is now 'struct ax25_cb', since I want
+ * both remote and iface now, might as well just stick to one argument.
+ *
+ */
+
+int inp_l3rtt_recv (char *src, struct ax25_cb *iaxp, struct mbuf *bp)
+{
+	struct nrnbr_tab *nr_neigh = NULL;	/* 22Aug2011, Maiko */
+	struct nrroute_tab *nr_node = NULL;	/* 26Aug2011, Maiko */
+	struct nr_bind *nrbp;				/* 26Aug2011, Maiko */
+
+	char tmp[AXBUF], nr_data[100], *dptr;
+	struct timeval tv, tvret;
+	int cnt, quality, chain;		/* 26Aug2011, Maiko */
+	struct timezone tz;
+	long rtt;
+
+	pullup (&bp, nr_data, 100); /* read all of it, 80 is just a max */
+
+	dptr = nr_data + 5;	/* skip dummy and 0x05 identifier */
+
+	while (*dptr == 0x20) dptr++;
+	tvret.tv_sec = strtoul (dptr, (char**)(&dptr), 0);
+	while (*dptr == 0x20) dptr++;
+	strtoul (dptr, (char**)(&dptr), 0);
+	while (*dptr == 0x20) dptr++;
+	strtoul (dptr, (char**)(&dptr), 0);
+	while (*dptr == 0x20) dptr++;
+	tvret.tv_usec = strtoul (dptr, (char**)(&dptr), 0);
+
+	gettimeofday (&tv, &tz);
+/*
+	log (-1, "incoming %ld %ld current %ld %ld",
+		tvret.tv_sec, tvret.tv_usec, tv.tv_sec, tv.tv_usec);
+*/
+	rtt = (long)(((tv.tv_sec - tvret.tv_sec) * 1000
+			+ (tv.tv_usec + 10000) / 1000) / 20);
+
+	if (!rtt) rtt = 1;
+
+	if (Nr_debug)
+	{
+		log (-1, "l3rtt response from [%s] rtt [%ld]",
+			pax25 (tmp, iaxp->remote), rtt);
+	}
+
+	/* 26Aug2011, Maiko get node for this callsign */
+	if ((nr_node = find_nrroute (iaxp->remote)) == NULLNRRTAB)
+	{
+		if (Nr_debug)
+		{
+			log (-1, "l3rtt recv, remote [%s] iface [%s] - no route entry",
+				pax25 (tmp, iaxp->remote), iaxp->iface->name);
+		}
+		return 0;
+	}
+
+	/* 22Aug2011, Maiko, Update the netrom tables, lookup neighbour first */
+
+	if ((nr_neigh = find_nrnbr (iaxp->remote, iaxp->iface)) == NULLNTAB)
+	{
+		if (Nr_debug)
+		{
+			log (-1, "l3rtt recv, remote [%s] iface [%s] - no neighbour entry",
+				pax25 (tmp, iaxp->remote), iaxp->iface->name);
+		}
+		return 0;
+	}
+
+	/* 26Aug2011, initialize all hops of routes via this neighbour to zero */
+	for (nrbp = nr_node->routes; nrbp != NULLNRBIND; nrbp = nrbp->next)
+	{
+		/* 26Aug2011, Maiko, Not sure why this is done, it's resulting in
+		 * my 'n <neighbour>' showing 0 hops, until the RIF comes in that
+		 * contains info on my neighbour (which should always be 1). why ?
+		 */
+		if (nrbp->via == nr_neigh)
+			nrbp->hops = 0;
+	}
+
+	/* is this a new interlink ? give it a higher RTT */
+
+	if (nr_neigh->inp_state == NR_INP_STATE_0)
+	{
+		nr_neigh->inp_state = NR_INP_STATE_RTT;
+
+		nr_neigh->rtt = rtt + 10;
+
+		log (-1, "neighbour [%s] interlink (l3rtt)",
+			pax25 (tmp, nr_neigh->call));
+
+		/* inp3_rif_tx (nr_neigh, 1); */
+	}
+
+	/* Smooth RTT value */
+
+	rtt = nr_neigh->rtt = (nr_neigh->rtt + rtt) / 2;
+
+	if (Nr_debug)
+	{
+		log (-1, "neighbour [%s] smoothed rtt [%d]",
+			pax25 (tmp, nr_neigh->call), rtt);
+	}
+
+	if (rtt >= TT_HORIZON)
+	{
+		if (Nr_debug)
+			log (-1, "is now over (l3rtt) horizon");
+
+		/* inp3_route_neg (nr_neigh);
+			nr_neigh_put (nr_neigh);
+			dev_put (dev);
+		 */
+			return 0;
+	}
+
+	/* 22Aug2011, Maiko, end (ongoing) USE l3rtt.c code from years ago */
+
+	/* 26Aug2011, Maiko, Set all routes of this neighbour with new rtt */
+
+	for (cnt = 0, chain = 0; chain < NRNUMCHAINS; chain++)
+	{
+		nr_node = Nrroute_tab[chain];
+
+		while (nr_node != NULL)
+		{
+			/* 02Nov2005, Maiko, NOS uses link lists, while Linux INP3
+			 * code uses arrays of 3 - difficult to port at times
+			 */
+			for (nrbp = nr_node->routes; nrbp != NULLNRBIND; nrbp = nrbp->next)
+			{
+				if (nrbp->via == nr_neigh)
+				{
+					quality = rtt2qual (nr_neigh->rtt + nrbp->tt, nrbp->hops);
+
+					cnt++;	/* just track the number of updates */
+
+					nrbp->quality = quality;
+				}
+			}
+
+			nr_node = nr_node->next;
+		}
+	}
+
+	/* 26Aug2011, Maiko, When I list a particular node after getting a
+	 * response to an l3rtt request, I see this code is indeed updating
+	 * the quality value of that node if the rtt of the neighbour has
+	 * changed. Very good, makes me happy, this stuff is sooo cool !
+	 */
+	if (Nr_debug)
+		log (-1, "quality updates done on %d routes", cnt);
+
+	return 1;
+}
+
+/*
+ * 19/20 August 2011 - Maiko, works, BUT crashing after the response comes
+ * back. After a bit of observation, I have to conclude that it's actually
+ * some thing in the trace code (likely nr_dump) that is doing this. I've
+ * had the trace shut off for several hours and it's perfectly fine now.
+ *
+ * 21Aug2001, Maiko, Think I'm done with this for now, payload size tuned
+ * up nicely, and it seems to be working quite well now.
+ */
+
+int inp_l3rtt_tx (struct nrnbr_tab *nr_neigh, char *ifcname)
+{
+	struct timezone tz;
+	struct timeval tv;
+	struct mbuf *hbp;
+	struct nrroute_tab *rp;
+	struct nr3hdr n3hdr;
+	struct mbuf *n3b;
+	char tmp[AXBUF];
+	char *rtt_data;
+
+	if (Nr_debug)
+	{
+		log (-1, "l3rtt request to [%s] on port [%s]",
+			pax25 (tmp, nr_neigh->call), ifcname);
+	}
+
+	/* get the netrom level 3 data formatted first */
+
+	if ((hbp = alloc_mbuf (69)) == NULLBUF)
+	{
+		log (-1, "inp_l3rtt_tx - no memory");
+		return 0;
+	}
+
+	hbp->cnt = 69;	/* 21Aug2011, Maiko (VE4KLM), fine tune the size */
+
+	rtt_data = hbp->data;
+
+	*rtt_data++ = 0x00;
+	*rtt_data++ = 0x00;
+	*rtt_data++ = 0x00;
+	*rtt_data++ = 0x00;
+
+	*rtt_data++ = NR_INFO;
+
+	/* do_gettimeofday (&tv); */
+	gettimeofday (&tv, &tz);
+
+	/*
+	 * 21Aug2011, Maiko (VE4KLM), The INP specification says the text portion
+	 * of L3RTT frames are implementation specific (which makes sense now that
+	 * I see the trace data), the remote system simply has to reflect it back
+	 * to the sender unchanged, so lets keep bandwith usage to a minimum, and
+	 * just send what we need. The JNOS version is not required, but it could
+	 * come in useful from a troubleshooting point of view.
+	 *
+	 * 22Aug2011, Maiko (VE4KLM), Now that nrnbr is updated, we can now use
+	 * the values from there and not the hardcoded values of 60 I used.
+	 */
+	rtt_data += sprintf (rtt_data, "%10d %10d %10d %10d JNOS 2.0i $M%d $N",
+		(int)tv.tv_sec, /* 60 */ nr_neigh->rtt, /* 60 */ nr_neigh->rtt,
+			(int)tv.tv_usec, TT_HORIZON);
+
+    *rtt_data = 0x0d;
+
+	/* now setup the netrom level 3 header */
+
+	memcpy (n3hdr.dest, L3RTTcall, AXALEN);
+
+	n3hdr.ttl = 3;	/* nr routing decrements it, it will go out as a 2 */
+
+	if ((rp = find_nrroute (nr_neigh->call)) == NULLNRRTAB)
+	{
+		if (Nr_debug)
+		{
+			log (-1, "no route to [%s] on port [%s]",
+				pax25 (tmp, nr_neigh->call), ifcname);
+		}
+		return 0;
+	}
+
+	/* we are originating this, so iaxp is set to NULLAX25 */
+   if (!nr_finally_route (hbp, rp, NULLAX25, &n3hdr))
+		free_p (n3b);
+
+	return 1;
+}
+
+/* 20Aug2011, Maiko */
+
+void doINPtick()
+{
+	struct nrnbr_tab *nr_neigh;
+
+	int chain;
+
+	for (chain = 0; chain < NRNUMCHAINS; chain++)
+	{
+		nr_neigh = Nrnbr_tab[chain];
+
+		while (nr_neigh != NULL)
+		{
+			inp_l3rtt_tx (nr_neigh, nr_neigh->iface->name);
+
+			nr_neigh = nr_neigh->next;
+		}
+	}
+  
+    /* Restart timer */
+    start_timer (&INPtimer) ;
+}
+
+/* 20Aug2011, Maiko */
+
+/* Set l3rtt interval (same structure function as donodetimer) */
+int doINPtimer (int argc, char **argv, void *p)
+{
+	log (-1, "INP scheduler is active");
+
+	INP_active = 1;	/* 21Aug2011, Maiko, flag to tell nr3.c to accept L3RTT */ 
+
+    stop_timer (&INPtimer) ;	/* in case it's already running */
+
+    INPtimer.func = (void (*)(void*))doINPtick;	/* what to call on timeout */
+
+    INPtimer.arg = NULLCHAR;	/* dummy value */
+
+    set_timer (&INPtimer, L3RTT_INTERVAL);	/* atoi(argv[1])*1000); */
+
+    start_timer (&INPtimer);
+
+    return 0;
+}
+
+#endif
+

@@ -1,0 +1,10 @@
+
+ differences between 2.0m.5 and 2.0m.4 - October 16, 2020
+ --------------------------------------------------------
+
+ 1) This update is mostly about JNOS internal BID generation and processing.
+
+    *** The CODE will be put into the RSYNC area in a day or so ***
+
+    Still trying to sort out some stuff, a little frustrated ...
+

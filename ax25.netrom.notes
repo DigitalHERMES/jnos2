@@ -1,0 +1,106 @@
+
+RIP (RIF)
+---------
+
+ax25
+
+  src  : ac 8a 68 96 98 9a e6
+  dest : ac 8a 64 a0 96 a8 69
+  ctrl : 24
+   pid : cf
+
+netrom
+
+  signature : ff
+
+   nodecall    ac 8a 64 a0 96 a8 08
+       hops    01
+         tt    00 00
+
+    field len  08
+    field type 00
+    field data 53 54 45 43 41 54      STECAT
+
+    field len  07
+    field type 01
+    field data 2c 87 31 04 20
+
+    end RIP ?? 00
+
+    nodecall   82 8a 6a 8a 40 40 1c
+        hops   03
+         tt    00 6a
+
+    field len  07
+    field type 00
+    field data 4d 4e 42 50 51         MNBPQ
+
+    end RIP ?? 00
+
+[snip]
+
+    node call  8e 70 a0 b4 a8 40 00
+         hops  03
+          tt   00 20
+
+    field len  08
+    file type  00
+    field data 4b 49 44 44 45 52      KIDDER
+
+    field len  07
+    field type 01
+    field data 2c 83 5b f5 20
+
+    end RIP ?? 00
+
+ax25
+----
+
+   dest       AXALEN      ac 8a 64 a0 96 a8 e8
+
+   source     AXALEN      ac 8a 68 96 98 9a 67
+
+   optional digis
+
+   ctrl       BYTE        c2
+
+   pid        BYTE        cf
+
+netrom (L3)
+-----------
+
+   source     AXALEN      ac 8a 68 96 98 9a 66
+
+   dest       AXALEN      ac 8a 64 a0 96 a8 69
+
+   ttl        BYTE        09
+
+netrom (L4)
+-----------
+
+   header     NR4MINHDR   04 01 05 00 28
+
+                          01
+
+                          ac 8a 68 96 98 9a 60
+
+                          ac 8a 68 96 98 9a 66
+
+L3RTT is actually netrom (L3) with destination L3RTT-0
+------------------------------------------------------
+
+0010  src    ac 8a 64 a0 96 a8 08
+      dst    98 66 a4 a8 a8 40 60
+      ttl    02   (actually called opcode)
+
+      dummy  00 00 00 00
+
+      05 4c 33 52 54 54 3a 20 20 20 20 20 20  ....L3RTT:
+0030  35 36 38 32 36 20 20 20 20 20 20 20 20 20 35 39  56826         59
+0040  20 20 20 20 20 20 20 20 20 35 39 20 20 20 20 20           59
+0050  20 33 31 35 38 34 20 53 54 45 43 41 54 20 4c 45   31584 STECAT LE
+0060  56 45 4c 33 5f 56 32 2e 31 20 58 52 6f 75 74 65  VEL3_V2.1 XRoute
+0070  72 31 38 37 66 20 24 4d 35 30 30 30 20 24 4e 0d  r187f $M5000 $N.
+
+
+

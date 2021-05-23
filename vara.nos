@@ -1,0 +1,13 @@
+#
+# This NOS script is called by the VARA HF modem interface
+# code when it detects the command and data tcp/ip streams
+# are active, in other words, modem is talking with JNOS.
+#
+# Edit to suit your own needs
+#
+# January 17, 2021, Maiko (VE4KLM)
+#
+
+varacmd "mycall ve4klm"
+pause 2
+varacmd "listen on"

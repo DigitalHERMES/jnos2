@@ -1,0 +1,28 @@
+#ifdef UNIX
+/*
+ * 19Jan2012, Maiko, We need to capture the ARROW keys, which in linux
+ * actually comes in as a sequence of 3 bytes. Apparently for windows it
+ * is 2 bytes. Capture the entire sequence and map to proper ARROW code.
+ */
+static int capture_seq_keys (int key_i)
+{
+	if (key_i == 27)	/* first escape character */
+	{
+		if (kbread () == 91)	/* second escape character */
+		{
+			switch (kbread ())
+			{
+				case 65:
+					key_i = UPARROW;
+					break;
+
+				case 66:
+					key_i = DNARROW;
+					break;
+			}
+		}
+	}
+
+	return key_i;
+}
+#endif	/* end of UNIX */

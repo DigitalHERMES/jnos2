@@ -1,0 +1,342 @@
+
+ Final patch, this is 2.0m.5F, next official version, cleaned everything up !
+
+ This patch converts the official 2.0m.4 to the new official 2.0m.5F :]
+
+  version.c - changed from 5E to 5F
+
+  mboxmail.c - base36 code now permanent
+   (removed HARGROVE_VE4KLM_FOX_USE_BASE36)
+
+  forward.c - multiple wl2k calls and base36 code now permanent
+   (removed HARGROVE_VE4KLM_FOX_USE_BASE36, renamed MULTIPLE_WL2K_CALLS)
+
+  fbbfwd.c -  base36 code now permanent
+   (removed HARGROVE_VE4KLM_FOX_USE_BASE36)
+
+  wlauth.c - multiple wl2k calls now permanent
+    (removed MULTIPLE_WL2K_CALLS)
+
+  j2KLMlists.[ch] - multiple wl2k calls now permanent
+   (renamed MULTIPLE_WL2K_CALLS)
+
+  aprssrv.c - removed code that had been long commented out
+
+  makefile - bumped up to 03Dec2020_v1.8 from 30Aug2020_v1.7
+   (removed directives from PATCHES that really didn't belong there)
+
+  configure - bumped up to 03Dec2020_v1.8 from 30Aug2020_v1.7
+   (must match what is defined in the makefile)
+
+  config.h.default - added a couple of directives previously in makefile
+   (also trying to clean up the file, sections by version # perhaps)
+
+ Couple of #define directives you can add to your config.h if you wish :
+
+   #define WINRPR	/* kiss over tcp/ip for SCS WinRPR modem software */
+
+   #define J2MFA	/* prototype of Multi Factor Authentication */
+
+ Note : JNOS 2.0m.5F is JNOS 2.0m.5E 'cleaned up'. I just want to get a new
+        official version out there, it's been a while and I'm sure everyone
+        is tired of all these patches (including myself actually) ...
+
+ 05Dec2020 - corrections made after initial patch release
+
+  compiler warnings (from N2NOV) corrected IF following defined in config.h :
+
+    RSPF, TCPGATE, MBOX_DYNIPROUTE, AX25_XDIGI, EDITOR
+    mailbox.c, tcpgate.c, rarp.c, ax25xdigi.c editor.c 
+    rspfcmd.c, rspfhdr.c
+
+    rspf.c - particularly concerned me, trying to understand the reason
+    behind 'pointer casting of source' on some of the function calls ?
+     (compiler warnings fixed, hopefully RSPF has not been broke)
+
+ 13Dec2020 - more corrections and 2 additions
+
+    mailbox.c - if a user has is not registered (REGISTER command) and they
+    try to telnet into a MFA enabled JNOS, it will crash, I wasn't checking
+    for a NULLCHAR on m->IPemail - fixed. The JNOS log will say user is not
+    registered for MFA use and disconnect them. Also changed sysop warning.
+
+    aprs.c - remove trailing 0xc0 from aprs data if we are getting it from
+    the new WinRPR interface, yes, it's a kludge, but I don't want to mess
+    with the winrpr.c source right now, need to give this some thought.
+
+    lapb.c - firestorm protection, read comments in the code for details.
+     (protection against strange behavior from apps using linux AX25 stack)
+
+ 21Dec2020 - couple of patches, they keep coming in, don't they :|
+
+    mailbox.c - don't disconnect an unregistered MFA user, chances are they
+    are not even in ftpusers file, so univperm is low enough for them to do
+    little to no damage - it also gives them an opportunity to REGISTER :)
+
+    Also forgot to kick the SMTP queue, failure to do so results in the user
+    having to wait a very long time before they get their auth code emailed.
+
+ 24Dec2020 - give sysops a way to disable enforcement of bbs user during fwd
+ sessions, had one report already, it makes life difficult for them, so added
+ the #ifndef J2_DONT_ENFORCE_BBS_USER compiler directive to mboxmail.c, then
+ you can '#define J2_DONT_ENFORCE_BBS_USER' in your config.h if you want :)
+  (also added to config.h.default, but as #undef, thanks Red :)
+
+ Originally Updated December 4, 2020
+
+ ------
+
+ Another patch, this is 2.0m.5E, all about Multi Factor Authentication (MFA)
+
+ 1) mailbox.c - added MFA support functions, this is where it happens.
+
+ 2) mboxcmd.c - added 2 new 'mbox' commands -> MFAexclude and MFAfixed.
+
+ 3) j2KLMlists.[ch] - added MFAexclude list and supporting functions.
+
+ 4) j2strings.[ch] - added MFAexclude strings.
+
+ 5) makefile - added '-DJ2FMA' to enable the MFA feature.
+
+ Note : IF you decide to #undef WINLINK_SECURE_LOGIN in your config.h, you
+        need to edit makefile and remove '-DMULTIPLE_WL2K_CALLS' from it or
+        else you will get an unresolved link error, have not fixed it yet.
+
+ 6) usage/MFAexclude.txt - copy this to your /jnos/usage area
+
+ DOCUMENTATION : https://www.langelaar.net/jnos2/documents/working.txt
+  (actually an edit of some new documentation I started last summer)
+
+  just search for the term MFA ...
+
+ 7) corrections made after initial patch release
+
+   29Nov2020, Maiko, The 'mbox MFAfixed' can NOT be any length, due to the way
+   the original non-BBS prompting code was written (it's related), so for now
+   the maximum length is 10 characters. It's also enforced in the command now.
+
+   Also note, incoming telnet mbox 'open' is now 'open (MFA)' in the JNOS log,
+   with exclusions logged as 'auth excluded' and failures as 'auth rejected'.
+
+   26Nov2020, Maiko, another oops, MFA prompting shouldn't be happening
+   for non telnet connects - if you are connecting ax25 over a port. It
+   turns out I wrongly interpreted the use of the &anony flag. I should
+   be using the value of m->family instead, patch file is updated now.
+
+   26Nov2020, Maiko, added code to reduce the amount of connect failed entries
+   in the main JNOS log if the WinRPR software is offline for extended times.
+    (so the tar.gz will contain an additional source file - winrpr.c)
+
+ Updated November 24, 2020
+
+ ------
+
+ Fourth patch, this one is 2.0m.5D, sorry it's not the final one yet :)
+
+ 1) makefile - added WINRPR define (for now) and the NEW winrpr object file.
+
+ 2) mboxmail.c - some major work on the SID capture stuff, much better now.
+
+ 3) config.c and winrpr.c - new WinRPR (KISS over TCP/IP) interface code.
+
+ 4) bbs10000.[ch] - long time coming updates to HTTP VNC service !!!
+
+ 5) ipcmd.c - remove the first 'gateway ip' column from genencaptxt file.
+
+ 6) OOPS - forgot to copy patched misc.c, netuser.c, socket.h, and telnet.c
+    for Brian's TNODE modifications - supposedly available version 2.0m.5
+
+    14Nov2020, Maiko, found a mistake in telnet.c - work around put in place.
+
+ Updated November 12, 2020
+
+ ------
+
+ Third patch, this one is 2.0m.5C, these are additions to 2.0m.5B changes.
+  (see the first two patches further further below)
+
+ * WHY are these being released as patches ? because I would like a fair of
+   time to pass to make sure they are all 'working' as planned before they
+   get permanently added to the official release - Sorry :|
+
+ 1) nr4subr.c - try and better validate a NETROM CB (Control Block) when a
+    NETROM disconnect is received, because we might be trying to free memory
+    for something that may have disappeared already.
+
+ 2) Bumped up Nr_maxroutes to 10, seeing Nr_maxroutes exceeded in the logs.
+
+ 3) mboxmail.c - IMPORTANT - if a station that is NOT configured as a BBS in
+    your ftpusers, sends a SID, JNOS will NOW send back terse message saying
+    the user is not configured for BBS operation, disrupting the flow !
+
+    This is my alternative to some modifications Brian (N1URO) came up with,
+    the concern being to protect against rogue or ignorant incoming connects,
+    which could result in possible malicious forwarding or illegal forwarding
+    of 3rd party messages. Any events are also logged to the JNOS logfile.
+
+    WARNING : IF you choose to apply this update, make sure ALL the remote
+    systems you expect INCOMING forwards from have 0x02000 OR'd into their
+    permissions - so for example, 0x0407f will become 0x0607f instead.
+
+    I also cleaned up log calls in the capture_sid() function, thinking they
+    should not be smack in the middle of link list processing, like what was
+    encountered in the DUPE control code. I also removed some old code that
+    was permanently commented out, no point leaving it there anymore.
+
+ 4) fbbfwd.c - updates to the DUPE control code introduced in 2.0m.5B.
+
+    When duplicate messages are coming in simulaneously, we pick one of them,
+    and then ignore the rest by refusing them. The problem with refusing them
+    however is if anything bad happens during the processing of the message we
+    picked, then we've taken away the ability for JNOS to receive the message
+    again from our remote systems. I've changed it now to use defer instead.
+
+    Also, if anything bad happens during processing, we need to make sure to
+    remove the BID from the DUPE control list, or else JNOS will NEVER accept
+    the message again, since the only other time it's removed is inside SMTP
+    code after the message has been successfully delivered by JNOS.
+
+ 5) Added EHLO support to smtpserv.c (thought it was there already, oops)
+
+    Discovered this by accident, when my android phone kept complaining that
+    the SMTP to my JNOS was not working, a quick trace showed the EHLO cmd.
+
+ Updated November 1, 2020
+
+------
+
+ Last updated October 25, 2020 just after 8:10 pm (Winnipeg Time) DST
+
+ *** This is BETA, test the crap out of it, watch for DUPES ***
+
+ ONLY APPLY THIS to the latest 2.0m.4 (from rsync repository), sorry ...
+
+  please report ANY issues ASAP, thank you !
+
+ This is the second patch, which sees the addition of DUPE protection for
+ concurrent forwarding sessions from more then one remote host, where the
+ same message with same BID is coming in from multiple sources, seconds of
+ each other, even within a minute or so of each other. JNOS is vunerable
+ to this, resulting in duplicate bulletins. This patch fixes the issue.
+
+ The first patch was 2.0m.5, this one is 2.0m.5B !
+
+ What this patch adds to the first patch
+ ---------------------------------------
+
+ 1) As noted above, addition of DUPE protection, explanation below :
+
+   When JNOS gets an incoming proposal and accepts a message with FS +, there
+   is a period of time (depending how quick forwarding is with remote system),
+   where if another message with the same BID shows up from another remote BBS
+   or even in the same batch as the 1rst incoming proposal, JNOS will actually
+   accept these messages with FS + as well ! That is because the BID does not
+   get stored in the history file until the message being forwarded has been
+   fully delivered by JNOS - that can take even several minutes believe it or
+   not. So during this 'gap' we are vunerable to incoming DUPES, yes, true !
+
+   So up till now, I have recommended some time ago to stagger forwards as
+   best as possible so that your system only forwards with one remote host
+   at a time, no concurrent forwarding with multiple remote systems. There
+   is still a rare chance for dupes, but this strategy greatly reduces it.
+
+   This new code now tracks ALL concurrent forwarding sessions, and watches
+   for messages having identifical BIDS, only allowing the first message it
+   sees to be accepted with FS + and processed by JNOS, the rest are ignored
+   and JNOS responds to those with FS - instead. It seems to work quite well
+   based on testing I was able to do with several systems definitely sending
+   me dupes at the time (ironically now when I need to test, they've decided
+   to follow the stagger recommendation, so harder to test now, how funny is
+   that), anyways ...
+
+   I'm still debating whether I should actually defer DUPE messages instead of
+   refusing them (using FS= instead of FS-) since if something goes wrong with
+   the delivery of the first message it sees, we loose the chance for another
+   message to come in and try again, so we'll see how that plays out first.
+
+ 2) Better error logging in case there are errors saving BID to history file.
+
+ How to update your JNOS 2.0m.4 system
+ -------------------------------------
+
+  run rsync on your source tree like you usually would, for example :
+
+   cd <your JNOS source>
+
+   rsync -av www.langelaar.net::jnos2 .
+
+  after the rsync is complete, you should notice a new file called :
+
+   update_jnos.2.0m.5B.tar.gz
+
+  extract the files using :
+
+   tar xvzf update_jnos.2.0m.5B.tar.gz
+
+  if you need TNODE stuff, then add #define TNODE to config.h
+
+  then do the usual make clean ; ./configure ; make
+
+ What you got in the previous 2.0m.5 patch
+ -----------------------------------------
+
+ 1) If I sent a message from my JNOS to someone else, the BID is of
+    the format NNNNN_VE4KLM, where NNNNN runs between 1 and 99999.
+
+    If an email client is used, NNNNN gets set from the last 5 characters
+    of the usually lengthy message-id from the email client, for example :
+
+         04027762-9c6f-a10b-94f5-5f8c9f8581ae@ve4klm.ampr.org
+
+    will result in 581ae_VE4KLM, which as of late has been an issue, note it
+    is not capitalized, and several instances of this have recently generated
+    duplicate messages from various JNOS systems out there. 
+
+    Why ? I suspect the uppercase/lowercase mods I did in 2018, started back
+    in 2015 are possibly responsible for this, so it is imperative to get as
+    many cases of JNOS 2.0 up to speed as possible once BETA tests are done.
+     (in other words I may have bit myself in the ass back then, not sure)
+
+    With this update, NNNNN is now a base36 number for both of the above cases,
+    since the pool of sequence numbers now goes into the several million range,
+    so for the case of email clients, it now draws from the JNOS sequence pool,
+    hopefully that makes sense to everyone.
+
+    If a message is NOT from our host, a crc and the callsign of where the
+    message came from is used to generate the BID, I was hoping to replace
+    the use of crc with the same base36 number, but some strange results
+    occurred in my tests, so I've held off with that.
+
+    Any time I release an update like this, I'm nervouse, so please keep your
+    eyes open for issues.
+
+ 2) Instead of hardcoding NETROM parameters, I know several folks have had it
+    done, please consider useing the following NEW commands in autoexec.nos :
+
+      netrom obsoinit <value>     default is 6, for NEDA use 5
+      netrom obsominbc <value>    default is 5, for NEDA use 3
+
+    I saw acktime hardcoded as well in some cases, use an existing command :
+
+      netrom acktime <value>      default is 3000, for NDEA use 64
+                                    (you may want to confirm, 0100 octal)
+
+ 3) If you want to use Brian's (N1URO) mods for TNODE, then define TNODE in
+    your config. h or in your makefile before you compile your code.
+
+ 4) There is other stuff I wanted to add, but this BID thing is important,
+    and I want to get it out of the way, there will be more BID stuff at a
+    later date, we're not done with this yet ...
+
+ IF you are running two systems with the same Call Sign
+ ------------------------------------------------------
+
+  Please consider staggering your sequence numbers, since the sequence number
+  pool is now into the several million range, not constrained to the old 1 to
+  99999 and back. For example, in my /jnos/spool/mqueue/sequence.seq, I reset
+  the value to 16801420, which starts my base36 bid at ANNNN, way ahead.
+
+  If anyone sees a flaw in this, please talk to me :]
+
+  Not so sure one should be running multi BBS with same callsigns, but ...
+

@@ -1,0 +1,130 @@
+
+* Note, there are two sections here - Sunday and Saturday ...
+
+August 8, 2010 - Sunday
+-----------------------
+
+* Oops, I made a bad mistake in fixing up msclock (), this is now fixed in
+  the file, unix.c - would have only been a problem on 32 bit systems, but
+  alot of JNOS systems are still running on the older architecture, so it
+  has to be fixed, period.
+
+  Below is a test program I used to figure this out.
+
+#include <stdio.h>
+#include <sys/time.h>
+#include <values.h>
+
+struct timeval Starttime;
+
+int msclock (struct timeval *tv)
+{
+	if (tv->tv_usec < Starttime.tv_usec)     {
+                tv->tv_usec += 1000000;
+                tv->tv_sec--;
+        }
+
+        return (tv->tv_sec - Starttime.tv_sec) * 1000 +
+                (tv->tv_usec - Starttime.tv_usec) / 1000;
+}
+
+long long int msclock2 (struct timeval *tv)
+{
+	long long int st_usec, tv_usec;
+	long long int st_sec, tv_sec;
+
+ 	st_usec = Starttime.tv_usec;
+ 	st_sec = Starttime.tv_sec;
+
+ 	tv_usec = tv->tv_usec;
+ 	tv_sec = tv->tv_sec;
+
+	if (tv_usec < st_usec)     {
+                tv_usec += 1000000;
+                tv_sec--;
+        }
+
+        return (tv_sec - st_sec) * 1000 + (tv_usec - st_usec) / 1000;
+}
+
+main ()
+{
+    struct timezone tz;
+    struct timeval nowtime;
+
+    gettimeofday (&Starttime, &tz);
+
+/*
+ * 2147483647 - maxlong on 32 bit system
+ *
+ * 9223372036854775807 - maxlong on 64 bit system
+ *
+ */
+	/* 24 days later is okay */
+    nowtime.tv_sec = Starttime.tv_sec + 60 * 60 * 24 * 24;
+
+    printf ("msclock32 %d msclock64 %lld\n",
+	msclock(&nowtime), msclock2(&nowtime));
+
+	/* 25 days later is not !!! */
+    nowtime.tv_sec = Starttime.tv_sec + 60 * 60 * 24 * 25;
+
+    printf ("msclock32 %d msclock64 %lld\n",
+	msclock(&nowtime), msclock2(&nowtime));
+}
+
+
+August 7, 2010 - Saturday
+-------------------------
+
+* Final review of changes to address the '25 day timer problem' :
+
+ hop.c - cticks changed to 'int64', cast results of calculation with (int32)
+ within the printf and log calls.
+
+ ftpcli.c - startclk changed to 'int64', redid (int32) cast on 'rate' calcs,
+ use MAXLONG for overflow check, (int32) cast tprintf of startclk. This and
+ other changes require addition of <values.h> to be included in global.h.
+
+ domain.c - msclock() is used to calculate rtt, but the DNS query packet only
+ allows 2 bytes (the 'id' field). That will do very strange things when the
+ clock becomes bigger than what 2 bytes can hold for precision. Changed it
+ to use modulo msclock () with MAXSHORT - see how that works.
+
+ at.c - removed unused code that refers to 'expiration'.
+
+ timer.h - expiration in 'struct timer' is now int64, removed MAX_TIME since
+ it is not used anywhere. Prototype for msclock() now returns int64.
+
+ tcp.h - 'rtt_time' and 'lastactive' in 'struct tcb' are now int64, got rid
+ of geniss() macro, only used in one place, just code into tcpin.c instead.
+
+ lapb.h - 'rtt_time' in 'struct ax25_cb' is now int64.
+
+ global.h - new 'typedef long long int int64', 'Clock' renamed to 'JnosClock'
+ to keep it more Jnos specific, and 'JnosClock' is now int64, not int32. Added
+ the header file #include <values.h> for MAXINT, MAXSHORT, and MAXLONG macros.
+
+ tcpout.c - (int32) cast an operation involving msclock () and lastactive.
+
+ unix.c - msclock() now returns int64. Note both variables 'uv_sec and tv_sec'
+ in 'struct timeval' are actually long, so we should maybe (int64) cast total
+ value in the return. Intermediate var 'oclock' changed to int64, and (time_t)
+ cast the 'tv.tv_sec' assignment. 'Clock' renamed to 'JnosClock', and is now
+ an int64, not an int32 as in the previous code.
+
+ tcpin.c - (int32) cast an operation involving msclock () and rtt_time, and
+ replaced geniss() macro with actual code. Changed assignment of tcp->iss to
+ use modulo of msclock() with MAXINT - that should work out better.
+
+ icmpcmd.c - (int32) cast all operations involving msclock(), and I think
+ it will be necessary to modulo msclock with MAXINT because ping structure
+ is limited to int32 size (4 bytes) - see how that works.
+
+ timer.c - 'Clock' renamed to 'JnosClock', and (int32) cast the assignment
+ of 'remainder' value in read_timer() function.
+
+ lapb.c - (int32) cast an operation involving msclock() and rtt_time.
+
+* Recompile it all AGAIN and let it run for a while, test as much as I can.
+

@@ -1,0 +1,28 @@
+remark " " > /tmp/rprreport.txt
+remark "Robust Packet Radio Stations heard on 10.147.30 (Dial) USB - mostly APRS" >> /tmp/rprreport.txt
+remark " (some of these are regular packet stations a little up frequency}" >> /tmp/rprreport.txt
+remark " ">> /tmp/rprreport.txt
+remark "From VE4KLM in Winnipeg, south facing sloper dipole" >> /tmp/rprreport.txt
+remark " ">> /tmp/rprreport.txt
+date >> /tmp/rprreport.txt
+
+remark " ">> /tmp/rprreport.txt
+remark "Direct" >> /tmp/rprreport.txt
+remark " ">> /tmp/rprreport.txt
+ax25 h rp0 >> /tmp/rprreport.txt
+remark " ">> /tmp/rprreport.txt
+remark "Via Digipeater" >> /tmp/rprreport.txt
+remark " ">> /tmp/rprreport.txt
+ax25 h digid rp0 >> /tmp/rprreport.txt
+remark " ">> /tmp/rprreport.txt
+
+#remark " " >> /tmp/rprreport.txt
+#remark "Destinations" >> /tmp/rprreport.txt
+#remark " " >> /tmp/rprreport.txt
+#ax25 h dest rp0 >> /tmp/rprreport.txt
+#remark " " >> /tmp/rprreport.txt
+
+#mailmsg heard@ww "Robust Packet Radio Stations Heard on 30 meters" /tmp/rprreport.txt
+
+#smtp kick
+
