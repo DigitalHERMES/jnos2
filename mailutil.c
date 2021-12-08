@@ -2,6 +2,16 @@
  *  culled from other files to reduce unnecessary cross references.
  *  This material is believed to be in the public domain.
  */
+
+/*
+ * 18Jun2021, Maiko, Interesting, in order to resolve the
+ * strcasestr() prototype, you have to do this before ANY
+ * include or it doesn't work, you'll still get warnings.
+ *  (need this for new ':' rewrite tag)
+ */
+#define _GNU_SOURCE
+#include <string.h>
+
 #ifdef MSDOS
 #include <io.h>
 #endif
@@ -28,7 +38,7 @@
 /* June 93 - Johan. K. Reinalda, WG7J
  * Mail file indexing added.
  */
-  
+
 #ifdef POP3CLIENT
   
 #ifdef POPT4
@@ -199,7 +209,15 @@ char *dir,*id;
  */
   
   
-/* Read the rewrite file for lines where the first word is a regular
+/*
+ * 16Jun2021, New ':' tag added to rewrite file so we can specify that
+ * rewrite rules are specific to a particular station or call (From).
+ *
+ * IMPORTANT : Only call this from fbbfwd.c and smtpserv.c, the other
+ * regular rewrite_address() calls can stay as is, the stub is further
+ * below this function.
+ *
+ * Read the rewrite file for lines where the first word is a regular
  * expression and the second word are rewriting rules. The special
  * character '$' followed by a digit denotes the string that matched
  * a '*' character. The '*' characters are numbered from 1 to 9.
@@ -209,15 +227,17 @@ char *dir,*id;
  * If the third word on the line has an 'r' character in it, the function
  * will recurse with the new address.
  */
-char *
-rewrite_address(addr, filecode)
-char *addr;
-unsigned int filecode;
+char *rewrite_address_new (char *addr, unsigned int filecode, char *fromsender)
 {
     char *argv[10], buf[PLINELEN], *cp, *cp2, *retstr;
-    int cnt;
+    int cnt, userspecific;
     FILE *fp;
-  
+
+#ifdef	DEBUG
+	if (fromsender != NULLCHAR)
+    	log (-1, "debug - rewrite_address [%s] [%d] [%s]", addr, filecode, fromsender);
+#endif
+
 #ifdef TRANSLATEFROM
     if (filecode == REWRITE_TO) cp=Rewritefile;
     else if (filecode == REWRITE_FROM) cp=Translatefile;
@@ -237,16 +257,69 @@ unsigned int filecode;
         return NULLCHAR;
   
     memset((char *)argv,0,10*sizeof(char *));
-    while(fgets(buf,sizeof(buf),fp) != NULLCHAR) {
+    while(fgets(buf,sizeof(buf),fp) != NULLCHAR)
+    {
         if(*buf == '#')     /* skip commented lines */
             continue;
-  
-        if((cp = strpbrk(buf," \t")) == NULLCHAR) /* get the first word */
+ 
+        if((cp = strpbrk(buf," \t:")) == NULLCHAR) /* get the first word */
             continue;
+
+	/* 17Jun2021, Maiko (VE4KLM), added the new ':' tag */
+	userspecific = 0; if (*cp == ':') userspecific = 1;
+
         *cp = '\0';
+
         if(!wildmat(addr,buf,argv))
             continue;       /* no match */
-        rip(++cp);
+	/*
+	 * 16Jun2021, Maiko (VE4KLM), added a new tag ':' to let us make the rule
+	 * specific to a sending station (FROM field of a message), so we can put
+	 * it into a HOLD area for example - thanks Charles (N2NOV) for the idea.
+	 */
+	cp++;
+
+	/*
+	 * 25Jun2021, Maiko, Oops if we get a NULL fromsender, which can happen
+	 * if a JNOS bbs user tries 'sb all@ww', it will actually get rewritten
+	 * to the first user specific rule it finds ! Thanks for catching this
+	 * Charles (N2NOV). So if the fromsender is NULL and this is a user
+	 * specific rule, then IGNORE this rule and continue to next one.
+	 *
+	 * The original rewrite_address() has no idea who fromsender is at
+	 * the time of composition, so as a result it has no choice but to
+	 * pass a NULL value for fromsender to this 'new function' here :|
+	 *
+	 */
+
+	if (userspecific)
+	{
+		char tsender[50], *sptr = tsender;
+
+		/* 25Jun2021, Maiko, Ignore this rewrite rule - original rewrite_address() */
+		if (fromsender == NULLCHAR)
+			continue;
+
+		while (*cp && (*cp != ' '))
+			*sptr++ = *cp++;
+
+		*sptr = 0; /* terminate tsender (FROM) string */
+
+#ifdef	DEBUG
+		log (-1, "debug - From Rule [%s] Msg From [%s]", tsender, fromsender);
+#endif
+		if (!strcasestr (fromsender, tsender))	/* make it case compare just to be safe */
+			continue;
+
+#ifdef	DEBUG
+		log (-1, "debug - rule applied");
+#endif
+		/* and just pass through to process the rule */
+	}
+
+        // rip(++cp);
+	rip (cp);	/* small change needed for new ':' tag above ! */
+
         /* scan past additional whitespaces */
         while (*cp == ' ' || *cp == '\t') ++cp;
         cp2 = retstr = (char *) callocw(1,PLINELEN);
@@ -271,7 +344,7 @@ unsigned int filecode;
          * everything by recursing.
          */
         if(strpbrk(cp,"rR") != NULLCHAR) {
-            if((cp2 = rewrite_address(retstr,filecode)) != NULLCHAR) {
+            if((cp2 = rewrite_address_new(retstr,filecode, fromsender)) != NULLCHAR) {
                 free(retstr);
                 return cp2;
             }
@@ -280,6 +353,18 @@ unsigned int filecode;
     }
     fclose(fp);
     return NULLCHAR;
+}
+
+/*
+ * 16Jun2021, Maiko (VE4KLM), instead of changing the argument list on all
+ * the rewrite_address() calls elsewhere in JNOS, I am going to rename the
+ * rewrite_address() to rewrite_address_new() but ONLY in this source file,
+ * then create a 'new' rewrite_address() ONLY in this source file, use it
+ * a stub function to the new rewrite_address_new() with a new NULL arg.
+ */
+char *rewrite_address (char *addr, unsigned int filecode)
+{
+	return rewrite_address_new (addr, filecode, NULLCHAR);
 }
   
 int dorewrite(int argc, char *argv[], void *p) {

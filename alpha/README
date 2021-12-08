@@ -1,0 +1,50 @@
+
+25Aug2021
+---------
+
+ Maiko (VE4KLM), updated bbs10000.c, some necessary fixes in the html code,
+ also the command line is now 80 characters, and on it's own 'row', easier
+ to compose messages that way. Also updated ftpsubr.c to disable --more--
+ prompting on HELP if you are coming in via a browser, confirmed working
+ for that and if you call HELP within the convers mode at BBS prompt.
+
+19Aug2021
+---------
+
+ Maiko (VE4KLM), there is a memory leak in the original alpha code, still
+ not fixed, but you should know it's there. Should be in mailbox.c file.
+
+ WARNING :
+
+  You need to do a MASS compile, since there is a 'struct let' in
+  mailbox.h that has two additional structure members added to it.
+
+ Note there are 2 files you have to overwrite in your existing source :
+
+     mailbox.h
+
+     bmutil.c
+
+NEW COMMANDS (by request) :
+
+  KH   (kill all held messages)
+
+  K<   (kill all messages from callsign)
+
+  K>   (kill all messages to callsign)
+
+This one is my idea (does not seem to save though when you exit) :
+
+  KR   (kill message READ flag on all messages)
+
+FIXED COMMAND - reverted back to original JNOS 1.11f :
+
+  L>   (list message to callsign)
+
+  L<   (list messages from callsign)
+
+ Back in 2010, some mods were put in that probably should not have
+ been put in without me better reviewing them, so sorry folks :|
+
+ Maiko / 09Aug2021
+

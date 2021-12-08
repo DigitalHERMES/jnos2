@@ -8,8 +8,269 @@
  The latest version of it is also present in the rsync area.
 
 
- fixes and additions to 2.0m.5Gx - May 20, 2021
- ----------------------------------------------
+ changes to Web Based User BBS interface - November 25, 2021
+ -----------------------------------------------------------
+
+ - This now works with apache (mod_proxy module) to give you full protection
+   of https during your web sessions with the JNOS httpvnc server. Download
+   the latest 'bbs10000.c' source file from the official rsync site, then :
+
+   Add the following directorive to your config.h :
+
+     #define APACHE_MOD_PROXY_BBS10000
+
+   Then recompile as follows :
+
+     rm bbs10000.o ; make
+
+   For the apache server side, add the following to your httpd.conf :
+
+     ProxyPass "/jnosbbs" "http://192.168.4.201:10000"
+     ProxyPassReverse "/jnosbbs" "http://192.168.4.201:10000"
+
+   You would place these inside of your *:443 virtual host definition, then
+   restart your apache server - that's what I do on my systems anyways ...
+
+   Then I can securely access my httpvnc sessions as follows :
+
+     https://www.langelaar.net/jnosbbs
+
+ - Comments and Caveats
+
+   Do NOT run multiple web sessions (for different users) to your httpvnc site
+   if any of them are on the same IP address as the others (ie, you might have
+   a group of users all behind the same firewall router). What happens is that
+   after the first user logs in, anyone else who tries to do so will actually
+   see (without login) the initial users interactions. That's because JNOS at
+   present can only depend on IP address to distinguish sessions. That is not
+   a huge problem IMHO - as long as you are aware of it.
+
+   The above applies regardless of whether you use mod_proxy or not !
+
+   For mod_proxy, JNOS uses the HTTP header 'X-Forwarded-For' to track the
+   actual IP address of connecting web clients.
+
+   Do NOT use the perl tcp proxy server I mentioned before, since there is
+   no way for it to provide a unique IP address, unless you happen to find
+   one that inserts the HTTP header I mentioned above.
+
+   IF you compile the mod_proxy feature, then httpvnc will only work through
+   apache, you can't have mod_proxy and regular working at the same time, so
+   it's either mod_proxy for all access or regular for all access, not both.
+
+   Why ? Because I have not figured out how to Rewrite Headers in httpd.conf
+   yet, so the code modification earlier does that for me. Once I figure it
+   out, then we can ditch the #define mentioned earlier, and run both modes
+   of apache (https) and usual (http) direct to JNOS at the same time :]
+ 
+
+ differences between 2.0m.5Gz and 2.0m.5Gx - September 12, 2021
+ --------------------------------------------------------------
+
+ September 12
+
+ - The VARA code now has an Access Mode, successfully able to B2F forward
+   with a Winlink Express client running in VARA HF P2P, and the PPP over
+   VARA is working 95% as well, latency is not great, but it does work.
+
+   I've had some discussions with the author of VARA (Jose) and now have a
+   much better understanding of why this is. At the end of the day, PPP over
+   VARA is not great, and certainly not the most efficient way to use VARA.
+
+   I have put together 3 demos (with video), so you can actually see this stuff
+   in action, instead of just hearing me talk about it. The links to the videos
+   are on the official JNOS 2.0 page, but here they are too :
+
+    "jnos forwarding with winlink express over vara"
+       https://www.langelaar.net/jnos2/vara/demo.html   
+
+    "jnos to jnos IP Bridge using PPP over vara"
+       https://www.langelaar.net/jnos2/vara/demoIPbridge.html
+
+    "jnos ftp session over IP Bridge using PPP over vara"
+       https://www.langelaar.net/jnos2/vara/demoFTP.html
+
+   The PPP was a good and informative experiment, but I need to rethink it ...
+
+   files updated : forward.c, ppp.c, vara.c, version.c, vara.nos
+
+   Please email if you encounter ANY problems, thank you
+    (maiko@pcs.mb.ca)
+
+   For the new access mode (forwarding), please refer to the j2addendum.txt
+   documention, for any of the IP Bridge stuff, I have updated the document
+   called "VARA Software Modem Support" to reflect changes since January.
+
+   Note : The IP Bridge (PPP) feature now requires this extra command :
+
+     varacmd ipbridge
+
+
+ final fixes and additions to 2.0m.5Gx as of July 15, 2021
+ ---------------------------------------------------------
+
+ July 15
+
+  - by request, the ability to run a script of commands on a remote system,
+    and log the results to file. Instead of reinventing the wheel, this new
+    feature has been made part of the forward.bbs mechanism - so any 'area'
+    defined in 'spool/forward.bbs' which ends with '_script' is treated as
+    a remote command and log sequence, with no forwarding actually done.
+
+    For example, I want to collect NETROM routing info from a couple of my
+    forwarding partners, N2NOV runs JNOS and K5DAT runs BPQ. In JNOS a bbs
+    user uses NR to display netrom routing, in BPQ they would use RO. I've
+    got the following 2 script entries defined in my forward.bbs file :
+
+     -------
+     n2nov_script
+     ax25 newyork n2nov-4
+     .nr
+     +>
+     *5
+     -------
+     k5dat_script
+     net k5dat-7
+     .ro
+     +>
+     *10
+     -------
+
+   This is just like any forwarding sequence, where I can just do a :
+
+     mbox ki N2nov_script
+
+   and/or
+
+     mbox ki K5dat_script
+
+   Note the capitalized first letter of 'area', since there will never be
+   any mail to deliver with these scripts, or you could always add a poll
+   option to the 'area' line and not worry about the capitalization.
+
+   Also note the lack of any message areas in the script definitions, it's
+   all pure commands, and waiting for results. Hopefully people find it to
+   be somewhat useful, we can certaintly build on it, feedback is welcome.
+
+   The output file generated each time is 'area'.dat, for example :
+
+     n2nov_script.dat, k5data_script.dat
+
+  - the previous newfiltercode subdirectory is gone, it's all part of the
+    main rsync now, for any of you wondering what happened to it, thanks.
+
+ July 2
+
+  - Removed a line of code I put in from 2015, where I was trying to support
+    the '!' or 'A' FSR character in any FS string sent by a remote BBS during
+    a forward session. It was a half hazardly attempt, resulting in possible
+    corruption of index files for the areas involved in the 'Restart Data'
+    situation. Typically one had to 'index <area>' to get things working
+    again. So now, all JNOS does is extract the offset, nothing more.
+
+    I need (want) to get this done and over with, it's been left for way too
+    long, in the meantime I strongly encourage everyone to update please.
+
+    NOTE : the update only exists in the rsync newfiltercode subdirectory,
+           which will get moved into the main release at a later date.
+
+ June 25
+
+  - Fixed a problem where if a user for example tries to 'sb all@ww' at the JNOS bbs
+    prompt, and you have user specific rules defined in your rewrite file, the posts
+    will be rewritten to the first user specific rule found. This is not good at all,
+    but I have fixed the problem. There is an updated mailutil.c source file in
+    the rsync newfiltercode subdirectory.
+
+ June 18
+
+  - By request, NEW capability in the rewrite file. One can now have entries
+    targeting (such a bad word) specific users / stations. In other words one
+    can now add entries that apply to only a FROM <pattern>, for example :
+
+       *@ww:ve4klm  hold
+       *@ww ww
+
+    This allows ALL incoming @ww to the ww area, but any @ww coming from me
+    is actually sent to the hold area instead. Or you could just refuse any
+    @ww coming from me, for example :
+
+       *@ww:ve4klm  refuse
+       *@ww ww
+
+    In the case of refuse, it is rejected right when the proposal appears.
+
+    What is new is the addition of the ':' tag, followed by a PATTERN to
+    match in the FROM field of the incoming message (no spaces). Yes, it
+    is a pattern, not a direct callsign match, sort of a wildcard ...
+
+  You can get the test code from the rsync area as follows :
+
+     rsync -av www.langelaar.net::jnos2/newfiltercode
+
+ June 16
+
+  - nntpserv.c now contains the latest stability fixes
+
+    AND to appease the NNTP police out there ...
+
+    JNOS is getting LOTS of flack due to a recent NNTP incident where internet
+    grade foul language and some very inappropriate content was channeled into
+    the packet network, so I have modified the code such that JNOS will only
+    allow connections to NNTP servers on the 44 network.
+
+    This is supposedly 'to protect sysops from themselves' - not my words and
+    not necessarily my choice, but I am really tired of this crap, maybe more
+    so the 'software wars type exchanges' that ensued because of it ...
+
+    At the end of the day - we ALL make mistakes, enough said !
+
+ June 15
+
+  - Yesterday, Bob Bruninga WB4APR was kind enough to add an entry for
+    the NOSaprs module of JNOS 2.0 to his 'tocall' list maintained at :
+
+      http://aprs.org/aprs11/tocalls.txt
+
+    NOSaprs is now 'assigned' APN2XX, with APZ200 noted as being used by
+    older versions of JNOS. It's been quite some time since NOSaprs was
+    introduced, so it's not really experimental anymore.
+
+    Thank you Janusz HF1L (ex.SP1LOP) for suggesting this change.
+
+    The APZ200 in aprs.h is now set to APN20H
+
+    IF you have routing for 'apz200', make sure you change the apz200 to
+    the new 'apn20h' AFTER you have the new source in place. YES, if you
+    use NOSaprs to TX, use 'ax25 route' to set the APRS path, example :
+
+      # 30Dec2020, So K4KPN-10 will catch it and pass it on further
+      ax25 route add apz200 rp0 WIDE1-1
+
+ June 7
+
+  - stability fixes to NNTPSERV, test code -> nntpserv_stability_fix.c
+     (copy to nntpserv.c, then 'make', feel free to send me JNOS logs)
+
+    NOTE : only applies if you have #define NNTPS in your config.h
+
+ May 27
+
+  - the ax25 heard save/load functionality now includes the ax25 destinations
+    and the ax25 digipeated stations heard lists. The save file from the last
+    mod can be safely loaded with this mod - you simply won't see the 2 lists
+    mentioned above of course. Files changed are axheard.c and axhsort.c
+
+    You 'could' add these commands to the very end of your autoexec.nos :
+
+       # 21May2021, Load the last saved heard lists
+       ax25 heard load /tmp/newsaveit.txt
+
+       # 21May2021, save heard lists every 15 minutes from this moment on
+       at now+0015 "ax25 heard save /tmp/newsaveit.txt+"
+
+  - warning, the use of '?' in rewrite will most probably crash JNOS, not sure
+    why anyone would use it there. IF you do, please educate me - thank you.
 
  May 20
 

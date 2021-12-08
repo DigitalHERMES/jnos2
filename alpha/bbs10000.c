@@ -105,39 +105,22 @@ static int showhvs ()
 	return 0;
 }
 
-/*
- * 25Nov2021, Maiko (VE4KLM), Adding original IP address for mod_proxy mode,
- * and if we really want to support multiple calls from the same IP address,
- * cause you never know, you might have a club or group of calls operating
- * from the same operations site with a firewall router in front, then we
- * should add a callsign as well, then do lookup on IP and callsign !
- *
- * But that is NOT so easy, so don't use multiple sessions from the
- * same IP address (internal or mod_proxy mode), working on it :(
- *
- */
-
-static HTTPVNCSESS *getmyhvs (int s, char *orgipaddr)
+static HTTPVNCSESS *getmyhvs (int s)
 {
 	struct sockaddr_in fsocket;
 
 	int cnt, len_i = sizeof(fsocket);
 
-	int32 incoming_ipaddr;	/* 25Nov2021 */
-
-	if (orgipaddr && *orgipaddr)
-		incoming_ipaddr = aton (orgipaddr);
-
-	else if (j2getpeername (s, (char*)&fsocket, &len_i) == -1)
+	/* need to get some information of the client connecting */
+	if (j2getpeername (s, (char*)&fsocket, &len_i) == -1)
 	{
 		log (s, "unable to get client information");
 		return (HTTPVNCSESS*)0;
 	}
-	else incoming_ipaddr = fsocket.sin_addr.s_addr;
 
 	for (cnt = 0; cnt < maxhvs; cnt++)
 	{
-		if (hvs[cnt].ipaddr == incoming_ipaddr /*(int32)fsocket.sin_addr.s_addr*/)
+		if (hvs[cnt].ipaddr == (int32)fsocket.sin_addr.s_addr)
 		{
 			if (hvsdebug)
 				log (s, "found client (%d) in session list", cnt);
@@ -186,7 +169,7 @@ static HTTPVNCSESS *getmyhvs (int s, char *orgipaddr)
 		if (hvsdebug)
 			log (s, "add and initialize new client (%d) to session list", cnt);
 
-		hvs[cnt].ipaddr = incoming_ipaddr; /* fsocket.sin_addr.s_addr; */
+		hvs[cnt].ipaddr = fsocket.sin_addr.s_addr;
 		hvs[cnt].mbxs[0] = hvs[cnt].mbxs[1] = -1;
 		hvs[cnt].escape_char = hvs[cnt].clear_char = 0;
 		hvs[cnt].abort_char = 0;	/* 05Nov2020, Maiko, New for aborting send message */
@@ -321,9 +304,7 @@ extern int callcheck (char*); /* 03Sep2010, Maiko, Need callsign validation*/
 
 extern char *strcasestr (const char*, const char*);	/* 05Nov2020, Maiko */
 
-/* 18Nov2021, Maiko (VE4KLM), Adding another parameter (orgipaddr) to accomodate mod_proxy support */
-
-static int httpget (int s, HTTPVNCSESS *hvsptr, char **calldata, char **cmddata, char **passdata, char **hostdata, char **orgipaddr)
+static int httpget (int s, HTTPVNCSESS *hvsptr, char **calldata, char **cmddata, char **passdata, char **hostdata)
 {
 	int retval = 0, err, len;
 	char important_stuff[ISCMDLEN+1];
@@ -333,13 +314,9 @@ static int httpget (int s, HTTPVNCSESS *hvsptr, char **calldata, char **cmddata,
 	int content_length = 0;
 	int inpostmode = 0;
 
-	int http_compression = 0;	/* 26Aug2021, Maiko (VE4KLM), http compression support for enabled clients */
-
 	*calldata = *passdata = *cmddata = (char*)0;	/* very important */
 
 	*hostdata = (char*)0;	/* 05Jul09, Maiko, Host from HTTP header */
-
-	*orgipaddr = (char*)0;	/* 18Nov21, Maiko, Original IP address of client when doing mod_proxy */
 
 	while (1)
 	{
@@ -405,7 +382,7 @@ static int httpget (int s, HTTPVNCSESS *hvsptr, char **calldata, char **cmddata,
 				}
 				else hvsptr->abort_char = 0;
 
-				// log (s, "[%s]", important_stuff);
+				log (s, "[%s]", important_stuff);
 
 				if ((ptr = strstr (important_stuff, "call=")) != NULL)
 					*calldata = parse (ptr + 5);
@@ -445,57 +422,6 @@ static int httpget (int s, HTTPVNCSESS *hvsptr, char **calldata, char **cmddata,
 
 		if ((ptr = strstr (important_stuff, "Host: ")) != NULL)
 			*hostdata = parse (ptr + 6);
-
-		/*
-		 * 18Nov2021, Maiko (VE4KLM), For Apache mod_proxy (HTTPS <-> HTTP) I
-		 * need the original IP address of the client, since our TCP (getmyhvs)
-		 * uses the IP address, which in the case of a proxy setup will always
-		 * result in the IP address of the linux side of the JNOS tun link :|
-		 */
-		if ((ptr = strstr (important_stuff, "X-Forwarded-For: ")) != NULL)
-			*orgipaddr = parse (ptr + 17);
-		/*
-		 * Debugging, it does work, but need to think about how to use this,
-		 * the problem is that the original IP is not convenient at all on
-		 * the getmyhvs() call, in proxy mode it will always look like it
-		 * is coming from the localhost (linux side of tun interface). So
-		 * how the heck am I going to avoid session conflicts on Proxy ?
-		 *
-		if (*orgipaddr)
-			log (-1, "actual client ip [%s]", *orgipaddr);
- 		 */
-
-		/*
-	`	 * 26Aug2021, Maiko (VE4KLM), HTTP compression for clients supporting it
-		 *
-		 * It's not HTTPS, but at least we can obscure data from plain sight ...
-		 *  (this is not encryption, we're not 'breaking any rules' in my opinion)
-		 *
-		 * Hold on a second Mikey, HTTP compression is from server to client only,
-		 * the purpose apparently is to simply reduce bandwidth, faster loading,
-		 * which is good of course, but it still doesn't address how to obscure
-		 * the stuff we get from the client, so I need to find a way to do it.
-		 *
-		 * I have no desire to write HTTPS code, not happening for this project :|
-		 *
-		 * So I am probably shit out of luck, unless I go the challenge/response
-		 * route, and only ask for a callsign at login, then have JNOS in some way
-		 * get a password or response code back to the user, then login them in ?
-		 *
-		 */
-
-		http_compression = 0;
-
-		if ((ptr = strstr (important_stuff, "Accept-Encoding: ")) != NULL)
-		{
-			// log (s, "client compression check [%s]", ptr + 17);
-
-			if (strstr (ptr + 17, "gzip") != NULL)
-				http_compression = 1;
-		}
-
-		if (http_compression)
-			log (s, "client supports gzip http compression");
 
 		/*
 		 * 05Nov2020, Maiko (VE4KLM), Are you kidding me ???
@@ -733,16 +659,11 @@ void mailbox_to_file (int dev, void *n1, void *n2)
 
 void serv10000 (int s, void *unused OPTIONAL, void *p OPTIONAL)
 {
-	/* 18Nov2021, Maiko, Added 'orgipaddr' to allow proper mod_proxy support */
-
-	char *body, *ptr, *cmddata, *calldata, *passdata, *hostdata, *orgipaddr;
-	int needed, len, resp, hvsptrnotset = 1;
+	char *body, *ptr, *cmddata, *calldata, *passdata, *hostdata;
+	int needed, len, resp;
 	struct mbx *curmbx;
-	HTTPVNCSESS hvsdummy, *hvsptr = &hvsdummy;	/* 25Nov2021, Maiko, so httpget() does not crash */
+	HTTPVNCSESS *hvsptr;
 	FILE *fpco;
-
-	/* 25Nov2021, Maiko, Need to set these to prevent flags from getting lost */
-	hvsdummy.escape_char = hvsdummy.abort_char = hvsdummy.clear_char = -1;
 
 	/* 25Aug2021, Maiko (VE4KLM), this can really fill up the log, take them out */
 	if (hvsdebug)
@@ -752,14 +673,7 @@ void serv10000 (int s, void *unused OPTIONAL, void *p OPTIONAL)
 
 	Curproc->output = s;
 
-#ifdef	DONT_COMPILE
-	/*
-	 * 08Jul2009, Maiko, Get session state and data for this web client
-	 *
-	 * 25Nov2021, Maiko (VE4KLM), moving (and adding another argument to)
-	 * the getmyhvs() call to after the httpget() call so we can support
-	 * the mod_proxy mode with APACHE (https <-> http) ...
-	 */
+	/* 08Jul2009, Maiko, Get session state and data for this web client */
 	if ((hvsptr = getmyhvs (s)) == (HTTPVNCSESS*)0)
 	{
 		/* 25Aug2021, Maiko (VE4KLM), this can really fill up the log, take them out */
@@ -769,36 +683,15 @@ void serv10000 (int s, void *unused OPTIONAL, void *p OPTIONAL)
 		close_s (s);
 		return;
 	}
-#endif
+
 	while (1)
 	{
 		char cmd[80];
 
-		resp = httpget (s, hvsptr, &calldata, &cmddata, &passdata, &hostdata, &orgipaddr);
+		resp = httpget (s, hvsptr, &calldata, &cmddata, &passdata, &hostdata);
 
 		if (resp < 1)
 			break;
-		/*
-		 * 25Nov2021, Maiko (VE4KLM), Moved and modifed getmyhvs() to here, see comment
-		 * earlier in the code, and new flag hvsptrnotset (only call this once ever),
-		 * this does work, BUT any hvsptr flags (clear, ctrl-a, ctrl-t) are lost since
-		 * they get written to dummy structure, not the newly acquired hvsptr, so how
-		 * to deal with that ? copy them back into the new hvsptr after getmyhvs().
-		 */
-		if (hvsptrnotset)
-		{
-			if ((hvsptr = getmyhvs (s, orgipaddr)) == (HTTPVNCSESS*)0)
-				break;
-
-			if (hvsdummy.escape_char != -1)
-				hvsptr->escape_char = hvsdummy.escape_char;
-			if (hvsdummy.abort_char != -1)
-				hvsptr->abort_char = hvsdummy.abort_char;
-			if (hvsdummy.clear_char != -1)
-				hvsptr->clear_char = hvsdummy.clear_char;
-
-			hvsptrnotset = 0;	/* important one shot operation */
-		}
 
 		if (hvsdebug)
 			log (-1, "hostdata [%s]", hostdata);
@@ -942,7 +835,7 @@ void serv10000 (int s, void *unused OPTIONAL, void *p OPTIONAL)
 	/* 25Aug2021, Maiko (VE4KLM), Bump this up from 1300 to 1500, added some formatting */
 	needed = len + 1500;		/* cmd response + standard form */
 
-//		if (hvsdebug)
+		if (hvsdebug)
 			log (s, "Body needed %d bytes", needed);
 
 	if ((body = malloc (needed)) == (char*)0)
@@ -969,43 +862,16 @@ void serv10000 (int s, void *unused OPTIONAL, void *p OPTIONAL)
 
 	ptr += sprintf (ptr, "<head><script type=\"text/javascript\">\nfunction scrollElementToEnd (element) {\nif (typeof element.scrollTop != 'undefined' &&\ntypeof element.scrollHeight != 'undefined') {\nelement.scrollTop = element.scrollHeight;\n}\n}\n</script></head>");
 
-	ptr += sprintf (ptr, "<body bgcolor=\"beige\"><br><center>");	/* 29Aug2021, Maiko, Center it so things appear nicer ? */
+	ptr += sprintf (ptr, "<body bgcolor=\"beige\"><br>");
 
 #endif
-
-	/* 29Aug2021, Bob (VE3TOK) thinks command should go below the display */
-	if (hvsptr->mbxr)
-	{
-		ptr += sprintf (ptr, "<p><form name=\"formName\"><textarea style=\"border: 1px solid black; padding: 10px;\" name=\"textAreaName\" readonly=\"readonly\" rows=24 cols=80>");
-
-		if (fpco)
-		{
-			char inbuf[82];
-
-			while (fgets (inbuf, 80, fpco))
-				ptr += sprintf (ptr, "%s", inbuf);
-
-			fclose (fpco);
-		}
-
-		/* 25Aug2021, Maiko (VE4KLM), the </form> should be in front of the </p> */
-		ptr += sprintf (ptr, "</textarea><script>scrollElementToEnd(document.formName.textAreaName);</script></form></p>");
-	}
 
 	/*
 	 * 05Jul09, Maiko, Now get hostname from HTTP header as we should
 	 * 04Nov20, Maiko (VE4KLM), 11 years later, holy cow, switching to POST, should never have used GET
 	 */
 	
-	ptr += sprintf (ptr, "<form name=\"mainName\" ");
-
-#ifdef	APACHE_MOD_PROXY_BBS10000
-	/* 19Nov2021, Maiko (VE4KLM), support use of mod_proxy to secure this page (important) */
-	ptr += sprintf (ptr, "action=\"https://%s/jnosbbs\" ", hostdata);
-#else
-	ptr += sprintf (ptr, "action=\"http://%s\" ", hostdata);
-#endif
-	ptr += sprintf (ptr, "method=\"post\">");
+	ptr += sprintf (ptr, "<form name=\"mainName\" action=\"http://%s\" method=\"post\">", hostdata);
 
 	ptr += sprintf (ptr, "<table bgcolor=\"#aaffee\" style=\"border: 1px solid black;\" cellspacing=\"0\" cellpadding=\"10\"><tr>");
 
@@ -1026,21 +892,34 @@ void serv10000 (int s, void *unused OPTIONAL, void *p OPTIONAL)
 		 * and finally the cmd field needs to SPAN 2 columns <td colspan=2>
 		 */
 
-		ptr += sprintf (ptr, "<td><input type=\"submit\" value=\"Enter / Refresh\">&nbsp;<input type=\"checkbox\" name=\"abort\"><font size=1>CTRL-A</font>&nbsp;<input type=\"checkbox\" name=\"escape\"><font size=1>CTRL-T</font>&nbsp;<input type=\"checkbox\" name=\"clear\"><font size=1>Clear</font></td></tr><tr><td colspan=2><input type=\"text\" name=\"cmd\" value=\"\" size=\"80\" maxlength=\"80\"></td></tr></table><script>document.mainName.cmd.focus();</script></form>");
+		ptr += sprintf (ptr, "<td><input type=\"submit\" value=\"Enter / Refresh\">&nbsp;<input type=\"checkbox\" name=\"abort\"><font size=1>CTRL-A</font>&nbsp;<input type=\"checkbox\" name=\"escape\"><font size=1>CTRL-T</font>&nbsp;<input type=\"checkbox\" name=\"clear\"><font size=1>Clear</font></td></tr><tr><td colspan=2><input type=\"text\" name=\"cmd\" value=\"\" size=\"80\" maxlength=\"80\"></td></tr></table><script>document.mainName.cmd.focus();</script></form><p>");
+
+		/* 25Aug2021, Maiko (VE4KLM), indent reading area a bit, looks better */
+		ptr += sprintf (ptr, "<form style=\"padding-left: 40px;\" name=\"formName\"><textarea style=\"border: 1px solid black; padding: 10px;\" name=\"textAreaName\" readonly=\"readonly\" rows=24 cols=80>");
+
+		if (fpco)
+		{
+			char inbuf[82];
+
+			while (fgets (inbuf, 80, fpco))
+				ptr += sprintf (ptr, "%s", inbuf);
+
+			fclose (fpco);
+		}
+
+		/* 25Aug2021, Maiko (VE4KLM), the </form> should be in front of the </p> */
+		ptr += sprintf (ptr, "</textarea><script>scrollElementToEnd(document.formName.textAreaName);</script></form></p>");
 	}
 	else
 	{
-		ptr += sprintf (ptr, "<td>Callsign&nbsp;&nbsp;<input type=\"text\" style=\"text-align: center;\" name=\"call\" size=\"6\" value=\"\" required>&nbsp;&nbsp;Password&nbsp;&nbsp;<input type=\"password\" style=\"text-align: center;\" name=\"pass\" size=\"6\" value=\"\" required></td>");
+		ptr += sprintf (ptr, "<td>call <input type=\"text\" style=\"text-align: center;\" name=\"call\" size=\"6\" value=\"\">&nbsp;pass <input type=\"password\" style=\"text-align: center;\" name=\"pass\" size=\"6\" value=\"\"></td>");
 
-		ptr += sprintf (ptr, "<td><input type=\"hidden\" name=\"cmd\" value=\"\"></td><td><input type=\"submit\" value=\"Enter\"></td></tr></table></form>");
+		ptr += sprintf (ptr, "<td><input type=\"hidden\" name=\"cmd\" value=\"\"></td><td><input type=\"submit\" value=\"Enter\"></td></tr></table></form><p>");
 
 		ptr += sprintf (ptr, "<h4>no active sessions - please login</h4>");
-#ifdef J2DEMO
-		ptr += sprintf (ptr, "&nbsp;&nbsp;&nbsp;Use your name as the password, no worries, it's a DEMO system");
-#endif
 	}
 
-	ptr += sprintf (ptr, "</center></body></html>\r\n");
+	ptr += sprintf (ptr, "</body></html>\r\n");
 	
 #ifdef	DONT_COMPILE
 	/*
@@ -1052,7 +931,7 @@ void serv10000 (int s, void *unused OPTIONAL, void *p OPTIONAL)
 #endif
 	len = ptr - body;
 
-	//if (hvsdebug)
+	if (hvsdebug)
  		log (s, "Body length %d", len);
 
 	/* write the HEADER record */
@@ -1063,11 +942,6 @@ void serv10000 (int s, void *unused OPTIONAL, void *p OPTIONAL)
 	/* 05Nov2020, Maiko (VE4KLM), Let people know it's 'recent' */
 	tprintf ("Server: JNOS 2.0m HTTP VNC 1.0\r\n");
 
-#ifdef	NOT_READY_TO_DO_THIS_YET
-	/* 26Aug2021, Maiko (VE4KLM), for clients supporting HTTP compression */
-	if (http_compression)
-		tprintf ("Content-Encoding: gzip\r\n");
-#endif
 	/* use a BLANK line to separate the BODY from the HEADER */
 	tprintf ("\r\n");
 

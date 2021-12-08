@@ -889,8 +889,29 @@ static int fbbdofs(struct fbbpacket *msglst,
 		/* 24Sep2020, Maiko (VE4KLM), should try and get this working, happening again with GB7CIP */
 		log (m->user, "FSR [%c] Offset [%ld] Start [%ld] msgn [%d]", fsr, Aoffset, m->mbox[msglst[i].number].start, msglst[i].number);
 #endif
-		/* 29Jan2015, Maiko (VE4KLM), adjust start of read for 'A' or '!' */
+		/*
+		 * 29Jan2015, Maiko (VE4KLM), adjust start of read for 'A' or '!'
+		 *
 		m->mbox[msglst[i].number].start += Aoffset;
+		 *
+		 * 02Jul2021, Maiko (VE4KLM), This is just WRONG, the offset applies
+		 * to the compressed file, should never have done this. I must admit
+		 * my approach to trying to get this Restart Data or Continuance of
+		 * a partial file forward (offset) has been half hazard, and I have
+		 * yet to find a proper solution to this.
+		 *
+		 * Changing the start value contributes to buggering up the index,
+		 * so it was a mistake to put it in way back when, sorry folks !
+		 * 
+		 * So having said that, all I've done so far is extract the offset
+		 * value from any incoming '!' or 'A' FSR character in the FS string
+		 * from a remote BBS, and log it. The worse that can happen is that
+		 * the remote BBS will get a checksum error and give up on us :|
+		 *
+		 * The next 'release' I really want (need) to get this working,
+		 * and I have a new max block size feature coming as well, that
+		 * might possibly reduce the chances of '!' or 'A' showing up.
+		 */
 #endif
 
          // Re-position filepointer to index....
@@ -1412,7 +1433,11 @@ int dofbbrecv(struct fwd *f)
           pwait(NULL);
           free(msglst[i].rewrite_to);
           msglst[i].rewrite_to = NULLCHAR;
-          if((cp = rewrite_address(msglst[i].to, REWRITE_TO)) != NULLCHAR) {
+
+	/* 16Jun2021, Maiko (VE4KLM), new send specific rules in rewrite, so we need to pass FROM field */
+          // if((cp = rewrite_address(msglst[i].to, REWRITE_TO)) != NULLCHAR)
+
+          if((cp = rewrite_address_new (msglst[i].to, REWRITE_TO, msglst[i].from)) != NULLCHAR) {
              // See if this is on the reject list.
              if(!strcmp(cp,"refuse")) {
           		logmbox (m->user, m->name, "%s on refusal list", msglst[i].messageid);

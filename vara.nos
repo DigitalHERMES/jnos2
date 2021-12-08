@@ -7,7 +7,9 @@
 #
 # January 17, 2021, Maiko (VE4KLM)
 #
-
+# NOTE : you must have the pause between commands !
+#
+pause 2
 varacmd "mycall ve4klm"
 pause 2
 varacmd "listen on"

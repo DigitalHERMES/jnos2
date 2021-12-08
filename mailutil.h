@@ -43,6 +43,9 @@ int mlock __ARGS((char *dir,char *id));
 int rmlock __ARGS((char *dir,char *id));
 char *rewrite_address __ARGS((char *addr, unsigned int filecode));
 
+/* 16Jun2021, Maiko (VE4KLM), new send specific rules in rewrite, so we need to pass FROM field */
+char *rewrite_address_new __ARGS((char *addr, unsigned int filecode, char *fromsender));
+
 /* in index.c */
 char *getname __ARGS((char *cp));
 char *getaddress __ARGS((char *string,int cont));

@@ -18,6 +18,10 @@
  * abs() the time value (see comments in ax25cmd.c) or else the
  * sort will not work at all, I suppose I could rewrite it to
  * handle the negative numbers, but using abs() is easiest.
+ *
+ * 21May2021, Maiko (VE4KLM), added 2 new sort functions for the
+ * newly added LOAD destination and digipeated heard calls.
+ *
  */
 
 #include "ax25.h"
@@ -66,6 +70,102 @@ struct lq *sort_ax_heard ()
 	}
 
 	return topnewlq;
+}
+
+/* 21May2021, Maiko (VE4KLM), function to sort the destination heard list */
+
+struct ld *sort_ad_heard ()
+{
+	register struct ld *lp, *lp2, *lplowest, *topnewld, *newlp, *newld = NULLLD;
+
+	int lowest;
+
+	for (lp = Ld; lp != NULLLD; lp = lp->next)
+	{
+		for (lowest = INT_MAX, lp2 = Ld; lp2 != NULLLD; lp2 = lp2->next)
+		{
+			if (lp2->time == INT_MAX) /* ignore already used */
+				continue;
+
+			// log (-1, "time %d lowest %d", lp2->time, lowest);
+
+			if ((abs)(lp2->time) < lowest)
+			{
+				lowest = (abs)(lp2->time);
+				lplowest = lp2;
+			}
+		}
+
+		/* lplowest points to entry with lowest time - most recent entry */
+
+		newlp = callocw (1, sizeof(struct ld));
+		memcpy (newlp, lplowest, sizeof(struct ld));
+		newlp->next = NULLLD;
+
+		if (newld == NULLLD)
+			topnewld = newld = newlp;
+		else
+			newld = newld->next = newlp;
+
+	    lplowest->time = INT_MAX; /* ignore already used (destroys time) */
+	}
+
+	/* destroy the old link list, free up the memory */
+	for (lp = Ld;lp != NULLLD; lp = newld)
+	{
+		newld = lp->next;	/* reuse pointer variable */
+		free (lp);
+	}
+
+	return topnewld;
+}
+
+/* 21May2021, Maiko (VE4KLM), function to sort the digipeated stations heard list */
+
+struct lv *sort_av_heard ()
+{
+	register struct lv *lp, *lp2, *lplowest, *topnewlv, *newlp, *newlv = NULLLV;
+
+	int lowest;
+
+	for (lp = Lv;lp != NULLLV; lp = lp->next)
+	{
+		for (lowest = INT_MAX, lp2 = Lv; lp2 != NULLLV; lp2 = lp2->next)
+		{
+			if (lp2->time == INT_MAX) /* ignore already used */
+				continue;
+
+			// log (-1, "time %d lowest %d", lp2->time, lowest);
+
+			if ((abs)(lp2->time) < lowest)
+			{
+				lowest = (abs)(lp2->time);
+				lplowest = lp2;
+			}
+		}
+
+		/* lplowest points to entry with lowest time - most recent entry */
+
+		newlp = callocw (1, sizeof(struct lv));
+		memcpy (newlp, lplowest, sizeof(struct lv));
+		newlp->next = NULLLV;
+
+		if (newlv == NULLLV)
+			topnewlv = newlv = newlp;
+		else
+			newlv = newlv->next = newlp;
+
+	    lplowest->time = INT_MAX; /* ignore already used (destroys time) */
+	}
+
+	/* destroy the old link list, free up the memory */
+	for (lp = Lv;lp != NULLLV; lp = newlp)
+	{
+		newlp = lp->next;	/* reuse pointer variable */
+		free (lp);
+	}
+
+	return topnewlv;
 }
 
 #ifdef	TEST_MY_ORIGINAL_CODE

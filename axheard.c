@@ -435,6 +435,8 @@ int doaxhsave (char *filename)
 {
 	char tmp[AXBUF];
 	struct lq *lp;
+	struct ld *lp2;
+	struct lv *lp3;
 	time_t now;
 	FILE *fp;
 
@@ -462,11 +464,37 @@ int doaxhsave (char *filename)
 
 	time (&now); fprintf (fp, "%ld %d\n", (long)now, secclock());
   
-	for (lp = Lq;lp != NULLLQ; lp = lp->next)
+	for (lp = Lq; lp != NULLLQ; lp = lp->next)
 	{
 		// SAVE these : something to identify iface, lp->addr, lp->time, lp->currxcnt
 
 		fprintf (fp, "%s %s %d %d\n", lp->iface->name, pax25 (tmp, lp->addr), lp->time, lp->currxcnt);
+	}
+
+	/*
+	 * 21May2021, Maiko (VE4KLM), added destinations and digipeated stations heard.
+	 *  (it is important to put a separator between the different heard lists)
+	 */
+
+	fprintf (fp, "---\n");
+	for (lp2 = Ld; lp2 != NULLLD; lp2 = lp2->next)
+		fprintf (fp, "%s %s %d %d\n", lp2->iface->name, pax25 (tmp, lp2->addr), lp2->time, lp2->currxcnt);
+
+	fprintf (fp, "---\n");
+	for (lp3 = Lv; lp3 != NULLLV; lp3 = lp3->next)
+	{
+		/*
+		 * Arrgggg, Maiko (VE4KLM), I keep forgetting that pax25() is
+		 * not 'thread safe', meaning you can't have them on the same
+		 * 'line', the first call will cancel out subsequent one(s) !
+		 *
+	fprintf (fp, "%s %s %s %d %d\n", lp3->iface->name, pax25 (tmp, lp3->addr), pax25 (tmp, lp3->digi), lp3->time, lp3->currxcnt);
+		 *
+		 */
+
+		fprintf (fp, "%s %s ", lp3->iface->name, pax25 (tmp, lp3->addr));
+
+ 		fprintf (fp, "%s %d %d\n", pax25 (tmp, lp3->digi), lp3->time, lp3->currxcnt);
 	}
 
 	fclose (fp);
@@ -488,7 +516,16 @@ int doaxhload (char *filename)
 	int32 rtatsave;	/* 15Apr2021, Maiko - runtime at file save */
 	FILE *fp;
 
+	/* 21May2021, Maiko (VE4KLM), added these for remaining 2 heard lists */
+	char thedigi[AXALEN], digipeater[12];
+	struct ld *lp2;
+	struct lv *lp3;
+
 	extern struct lq *sort_ax_heard();	/* 13Apr2021, Maiko */
+
+	/* 21May2021, Maiko (VE4KLM), two brand new sort functions */
+	extern struct ld *sort_ad_heard();
+	extern struct lv *sort_av_heard();
 
 	if (filename == NULL)
 		filename = def_axheard_backup_file;
@@ -546,9 +583,13 @@ int doaxhload (char *filename)
 
 	while (fgets (iobuffer, sizeof(iobuffer) - 2, fp) != NULLCHAR)
 	{
+		/* 21May2021, Maiko, Check for separator, break out for next list */
+		if (strstr (iobuffer, "---"))
+			break;
+
 		sscanf (iobuffer, "%s %s %d %d", ifacename, callsign, &axetime, &count);
 
- 		// log (-1, "%s %s %d %d", ifacename, callsign, axetime, count); 
+ 		log (-1, "%s %s %d %d", ifacename, callsign, axetime, count); 
 
 		if ((ifp = if_lookup (ifacename)) == NULLIF)
 			log (-1, "unable to lookup iface [%s]", ifacename);
@@ -593,11 +634,93 @@ int doaxhload (char *filename)
 		}
 	}
 
+	/*
+	 * 21May2021, Maiko (VE4KLM), Load the Destinations Heard List
+	 *
+	 * NOTE : The separator --- between the different heard lists
+	 *        is very important, allows us to stick to one file.
+	 */
+
+	while (fgets (iobuffer, sizeof(iobuffer) - 2, fp) != NULLCHAR)
+	{
+		/* Check for separator, break out for the last list */
+		if (strstr (iobuffer, "---"))
+			break;
+
+		sscanf (iobuffer, "%s %s %d %d", ifacename, callsign, &axetime, &count);
+
+ 		log (-1, "%s %s %d %d", ifacename, callsign, axetime, count); 
+
+		if ((ifp = if_lookup (ifacename)) == NULLIF)
+			log (-1, "unable to lookup iface [%s]", ifacename);
+
+		else if (setcall (thecall, callsign) == -1)
+			log (-1, "unable to set call [%s]", callsign);
+
+		/* if the call is already there, then don't overwrite it of course */
+   		else if ((lp2 = ad_lookup (ifp, thecall, 1)) == NULLLD)
+		{
+			if ((lp2 = ad_create (ifp, thecall)) == NULLLD)
+				log (-1, "unable to create Ld entry");
+			else
+			{
+				lp2->currxcnt = count;
+				lp2->time = (int32)(now - atatsave) + rtatsave - axetime + secclock();
+				lp2->time *= -1;
+			}
+		}
+	}
+
+	/*
+	 * 21May2021, Maiko (VE4KLM), Load the Digipeated Stations Heard List
+	 *
+	 * NOTE : The separator --- between the different heard lists
+	 *        is very important, allows us to stick to one file.
+ 	 */
+
+	while (fgets (iobuffer, sizeof(iobuffer) - 2, fp) != NULLCHAR)
+	{
+		/* there is no separator after this list right now, it's the last one */
+
+		sscanf (iobuffer, "%s %s %s %d %d", ifacename, callsign, digipeater, &axetime, &count);
+
+ 		log (-1, "%s %s %s %d %d", ifacename, callsign, digipeater, axetime, count); 
+
+		if ((ifp = if_lookup (ifacename)) == NULLIF)
+			log (-1, "unable to lookup iface [%s]", ifacename);
+
+		else if (setcall (thecall, callsign) == -1)
+			log (-1, "unable to set call [%s]", callsign);
+
+		else if (setcall (thedigi, digipeater) == -1)
+			log (-1, "unable to set call [%s]", callsign);
+
+		/* if the call is already there, then don't overwrite it of course */
+   		else if ((lp3 = av_lookup (ifp, thecall, thedigi, 1)) == NULLLV)
+		{
+			if ((lp3 = av_create (ifp, thecall, thedigi)) == NULLLV)
+				log (-1, "unable to create Lv entry");
+			else
+			{
+				lp3->currxcnt = count;
+				lp3->time = (int32)(now - atatsave) + rtatsave - axetime + secclock();
+				lp3->time *= -1;
+			}
+		}
+	}
+
+	/* End of loading the 3 heard lists - 11:30 am, just have to write 2 new sort functions */
+
 	fclose (fp);
 
-	/* new function required (Maiko) - need to sort by time file order does not match Lq order */
+	/* new function required (Maiko) - need to sort by time, since file order does not match Lq order */
 
 	Lq = sort_ax_heard ();	/* confirmed working 7:40 pm 13Apr2021 !!! */
+
+	/* 21May201, Maiko (VE4KLM), two more brand new sort functions (see axhsort.c) */
+
+	Ld = sort_ad_heard ();
+	Lv = sort_av_heard ();
 
 	return 0;
 }

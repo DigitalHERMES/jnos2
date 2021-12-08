@@ -1,5 +1,5 @@
 
-                                   JNOS release 2.0m.5F
+                                   JNOS release 2.0m.5Gz
 
                                by Maiko Langelaar / VE4KLM
 
@@ -7,13 +7,13 @@
               enhancements to the original JNOS 1.11f software after it was
                rebranded as the JNOS 2.0 project back in October of 2004.
 
-                   Copyright (C) 2004-2020 by Maiko Langelaar / VE4KLM
+                   Copyright (C) 2004-2021 by Maiko Langelaar / VE4KLM
 
            This is a living document, started on July 9, 2020, Thursday evening
 
-                   Last updated on December 8, 2020, Tuesday Evening
+                         Last updated on September 12, 2021
 
-                      Document Version : JNOS-2-0m-5F-08-Dec-2020
+                      Document Version : JNOS-2-0m-5Gz-12-Sep-2021
 
 << page break >>
 
@@ -50,11 +50,20 @@
 
    3.2.1) Monitoring forward.bbs connection sequence
 
+   3.2.2) Non Forwarding command scripts to remote systems
+           (collect remote bbs stats, routing information, etc)
+
   3.3) Message BIDs now BASE36
 
   3.4) Control of Duplicate Messages
 
   3.5) Security of Forwarding Partners
+
+  3.6) Rewrite File - can now target specific FROM users (stations)
+
+  3.7) Lack of Support for Partial (Restart Data) Forwarding
+
+  3.8) Handling B2F from non-Winlink systems
 
  4) SNMP Server
 
@@ -101,6 +110,12 @@
 
    5.8.1) Running and Configuring
    5.8.2) JNOS 2.0 Configuration
+
+  5.9) Fldigi
+
+  5.10) EA5HVK VARA HF and VARA FM Software Modems
+
+   5.10.1) Access Mode - Forwarding (B2F) with Winlink Express station
  
   6) Reference by Remote Call Instead of AX.25 Control Block
 
@@ -136,9 +151,14 @@
 
  17) JNOS Log Triggers
 
- 18) Loading / Saving AX25 Heard List
+ 18) Enhanced AX25 Heard List
+      (save to file, load from file, heard via digipeater)
 
- 19) Next Item
+ 19) The APRS side of JNOS
+
+   19.1) The APRS 'destination' call or 'tocall'
+
+ 20) Next Item
 
 << page break >>
 
@@ -682,6 +702,54 @@
  In any event, now you have a few hopefully useful tools to help you nail down
  the proper sequence of commands in your forward.bbs file.
 
+ 3.2.2) Non Forwarding command scripts to remote systems
+        ------------------------------------------------
+
+ JNOS has the ability to run a script of commands on a remote bbs system, and
+ log the results to file. This feature uses the forward.bbs mechanism - so any
+ section defined in 'spool/forward.bbs' which ends with '_script' is treated as
+ a remote command and log sequence (there is NO forwarding done for these).
+
+ As an example, I would like to collect NETROM routing information from two of
+ my forwarding partners, one runs JNOS, the other BPQ. A BBS user in JNOS will
+ use the 'NR' command, but in BPQ they would use the 'RO' command instead.
+
+ So I have the following 2 script entries defined in my forward.bbs file :
+
+     -------
+     n2nov_script
+     ax25 newyork n2nov-4
+     .nr
+     +>
+     *5
+     -------
+     k5dat_script
+     net k5dat-7
+     .ro
+     +>
+     *10
+     -------
+
+   This is just like any forwarding sequence, where I can just do a :
+
+     mbox ki N2nov_script
+
+   and/or
+
+     mbox ki K5dat_script
+
+   Note the capitalized first letter of section, since there will never be
+   any mail to deliver with these scripts, or you could always add a poll
+   option to the section line and not worry about the capitalization.
+
+   Also note the lack of any message areas in the script definitions, it's
+   all pure commands, and waiting for results. Hopefully people find it to
+   be somewhat useful, we can certaintly build on it, feedback is welcome.
+
+   The output file generated for eaction section is 'section'.dat, ie :
+
+     n2nov_script.dat, k5data_script.dat
+
  3.3) Message BIDs now BASE36
       -----------------------
 
@@ -738,6 +806,55 @@
  These events are also logged to the JNOS logfile as :
 
     "SID from non BBS user, discouraged"
+
+ 3.6) Rewrite File - can now target specific FROM users (stations)
+      ------------------------------------------------------------
+
+ Entries in the rewrite file are now capable of targeting (such a bad word)
+ specific users / stations. In other words one can now add entries that apply
+ to only a FROM <pattern>, for example :
+
+       *@ww:ve4klm  hold
+       *@ww ww
+
+ This allows ALL incoming @ww to the ww area, but any @ww coming from me is
+ actually sent to the hold area instead. Or you could just refuse any @ww
+ coming from me, for example :
+
+       *@ww:ve4klm  refuse
+       *@ww ww
+
+ In the case of refuse, it is rejected right when the proposal appears.
+
+ What is new is the addition of the ':' tag, followed by a PATTERN to match in
+ the FROM field of the incoming message (no spaces). Yes, it is a pattern, not
+ a direct callsign match, sort of a wildcard ...
+
+ 3.7) Lack of Support for Partial (Restart Data) Forwarding
+      -----------------------------------------------------
+
+ JNOS still does not support the '!' or 'A' FSR character in any FS string it
+ might receive from a remote BBS during a forward session. I have tried to get
+ it working over the years, but my attempts to do so have been half hazardly
+ tried, and in the end it remains a thorn in my side. I need to fix it, yes.
+
+ It has been observed you can significaly reduce the chances of 'Restart Data'
+ condition happening with BPQ or a 'continue forwarding partial file' in the
+ FBB software, by adjusting the FBB max message blocksize on the remote end.
+
+ I've thought of adding an FBB max message blocksize parameter to forward.bbs
+ entries as one way to to deal with reducing the chances of this happening.
+
+ 3.8) Handling B2F from non-Winlink systems
+      -------------------------------------
+
+ It has been observed that some recent BPQ systems are presenting B2F in the
+ SID, which can cause problems, since I wrote the B2F code mostly for Winlink
+ CMS interactions.
+
+ What I have done in the meantime is modified the code to downgrade any B2F
+ connections from non-Winlink systems to use B1F instead, until such time I
+ am able to get it properly working and properly tested.
 
 << page break >>
 
@@ -1341,6 +1458,83 @@
    of log entries over time, the idea being not to have 'connect failed' put
    into the log each and every minute, filling up the log - experimental.
 
+ 5.9) Fldigi
+     -------
+
+   Support for FLDIGI started with JNOS 2.0j.7s - June of 2015
+
+   Ths official site for FLDIGI is -> http://www.w1hkj.com
+
+   JNOS can attach a KISS port to FLDIGI - experimental, for example :
+
+     # connection to fldigi is like AXUDP, using UDP port 10000
+     attach axudp hf 256 192.168.1.174 ve4klm 10000 10000
+
+     # then configure the port for FLDIGI KISS mode
+     attach fldigi hf
+
+   The comile option (in your config.h) if you don't have it already :
+
+     #define FLDIGI_KISS
+
+   This is NOT a TCP/IP server modem - but routing concepts still apply.
+
+ 5.10) EA5HVK VARA HF and VARA FM Software Modems
+       ------------------------------------------
+
+   The original VARA software modem support was strictly about PPP over VARA, to
+   implement some type of IP Bridge, after a few weeks of experimentation, it is
+   fairly clear that PPP over VARA is not great (terrible latency), it certainly
+   does work, but it is no where near the most efficient way to utilize VARA.
+
+   The PPP over VARA (IP Bridge) has it's own documentation, see the file :
+
+     https://www.langelaar.net/jnos2/documents/j2varanotes.txt
+
+   The most recent update of the VARA code features the so called Access Mode,
+   allowing you to actually forward with Winlink Express running in VARA HF P2P
+   mode, please refer to the section immediately below on how to do this.
+
+ 5.10.1) Access Mode - Forwarding (B2F) with Winlink Express station
+         ------------------------------------------------------------
+
+   All you need to do is attach a VARA interface (just like the PPP stuff), and
+   then create an entry in your forward.bbs configuration file, the same as how
+   you would setup to any other remote BBS you may be forwarding with, then it
+   is just a matter of kicking the mailbox to get things going.
+
+   Here is an example of how you would attach the VARA software modem :
+
+     attach vara vara0 1500 10.8.10.6 8300
+
+   vara0 is the name of the interface (port), 1500 stays as is, 10.8.10.6 is
+   the IP address of the windows PC on which VARA software modem is running,
+   obviously you would put in your own IP address, and 8300 is the command
+   port of the VARA software modem.
+
+   JNOS will automatically set the data channel to command port + 1, so in
+   this case the VARA software modem should be configured to use 8300 for
+   the command channel and 8301 for the data channel.
+
+   Here is an example of a forward.bbs entry :
+
+     -------
+     wq6n
+     vara ve4klm wq6n
+     wq6n
+     -------
+
+   Note the new connect command 'vara', the syntax is simple, first callsign
+   is that of your own JNOS system, the second callsign is that of the remote
+   system you are calling, easy enough.
+
+   Now you can issue commands like 'mbox kick wq6n' or 'mbox kick Wq6n', you
+   can add the Poll option to this forward.bbs entry if you want as well.
+
+   Give section 5.3) Network and Routing Considerations a good read, since
+   JNOS and the Windows box running VARA will most likely NOT be directly
+   on the same subnet or network. Routing is important for them to talk.
+
  6) Reference by Remote Call Instead of AX.25 Control Block
     -------------------------------------------------------
 
@@ -1907,23 +2101,82 @@
 
  Documentation could be better, but the examples should help for now ?
 
- 18) Loading / Saving AX25 Heard List
-     --------------------------------
+ 18) Enhanced AX25 Heard List
+     ------------------------
 
- You can now Save and Load the axheard list, to and from file. I felt it was
- important to keep the new commands within the 'ax25 heard' context, so I've
- changed the syntax over previous versions of JNOS and it's now this :
+ JNOS 2.0 tracks calls heard via a digipeater, complimenting the existing lists
+ of calls heard direct, and destination calls heard. As well, you can now save
+ the entire AX25 heard (all 3 lists) to file, and you can load them from file.
 
-     jnos> ax25 heard
-     Usage : ax heard < show | dest > [<iface>]
-             ax heard < save | load >
+ So you can now actually monitor for stations not directly heard. This feature
+ came about due to my crazy obsession with Robust Packet lately and seeing all
+ the APRS frames coming in on 30 meters, many via K4KPN-10, so it was nice to
+ to know who else was actually on frequency, without hearing them directly.
 
- The filename is hardcoded to 'AxHeardFile' at this time, and this feature too
- is still at the original prototype release, still experimental. The time stamp
- on the load might be off in certain cases. This needs work, and I am no longer
- sure messing with the original 'ax25 heard' command was a good idea ...
+ The syntax of 'ax25 heard' has changed from the original JNOS, ie :
 
- 19) Next Item
+   jnos> ax25 heard
+
+   Display stations heard on ax25 interfaces
+
+    Usage : ax heard *[ dest | digid ] all | <iface>
+
+            ax heard save | load *[ filename ]
+
+      * denotes an optional single argument
+
+    Some examples below :
+
+      ax25 h all            traditional syntax, but requires 'all' for ALL ports
+      ax25 h digid rp0      NEW show stations heard via a digipeater on port rp0
+      ax25 h ax0            traditional syntax, show directly heard port ax0
+      ax25 h dest all       show destination calls heard on ALL ports
+
+    Note : 'ax25 dest' and 'ax25 hearddest' are no more - use 'ax25 heard' now.
+     (the default save or load file is 'AxHeardFile' in JNOS root directory)
+
+   You 'could' add these commands to the very end of your autoexec.nos :
+
+       # 21May2021, Load the last saved heard lists
+       ax25 heard load /tmp/newsaveit.txt
+
+       # 21May2021, save heard lists every 15 minutes from this moment on
+       at now+0015 "ax25 heard save /tmp/newsaveit.txt+"
+
+   That way you can keep a list going for as long as you want, it will always
+   be maintained everytime you restart your JNOS system, and the time stamps
+   should be fairly well preserved in the process ...
+
+ 19) The APRS side of JNOS
+     ---------------------
+
+ Did you know JNOS 2.0 has APRS capabilities - the NOSaprs 'module'. My
+ original documentation can be found at the website (URL) below :
+
+    https://www.langelaar.net/projects/nosaprs
+
+ 19.1) The APRS 'destination' call or 'tocall'
+       ---------------------------------------
+
+ In mid June, Bob Bruninga WB4APR was kind enough to add an entry for NOSaprs
+ to his official 'tocall' list maintained at the website (URL) below :
+
+    http://aprs.org/aprs11/tocalls.txt
+
+ NOSaprs is now 'assigned' APN2XX, with APZ200 noted as being used by older
+ versions of JNOS. It's been quite some time since NOSaprs was introduced,
+ so it's not really experimental anymore.
+
+ Thank you Janusz HF1L (ex.SP1LOP) for suggesting this change.
+
+ If you use NOSaprs to TX, then you can set the APRS path as follows :
+
+    # 30Dec2020, So K4KPN-10 and others will catch it and pass it on further
+    ax25 route add apn20h rp0 wide1-1
+
+ In the above example, rp0 is my robust packet port on 30 meters.
+
+ 20) Next Item
      ---------
 
 << page break >>

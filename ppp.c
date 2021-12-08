@@ -270,7 +270,7 @@ static int ppp_tx_active (int type, struct iface *ifp)
    int txActive = 0;
 
 #ifdef	EA5HVK_VARA
-    extern int vara_ptt;	/* 15Jan2021, new as well */
+    extern int /* vara_ptt, */ vara_buffer;	/* 15Jan2021, new as well, 09Sep2021, Maiko, added buffer */
 #endif
 
    switch (type)
@@ -288,7 +288,20 @@ static int ppp_tx_active (int type, struct iface *ifp)
       case 1:
 
 #ifdef	EA5HVK_VARA
-          txActive = (vara_ptt != 0);
+
+	/*
+	 * 09Sep2021, Maiko (VE4KLM), Looking at how the Asy stuff works, an active TX
+	 * is actually determined by whether the snd queue is empty or not, think about
+	 * this Mikey - it's not PTT driven ! It's driven by how much is left in the snd
+	 * queue, meaning I need to instead pay attention to the BUFFER status returned
+	 * by the VARA modem, NOT whether PTT is active or not, this new code seems to
+	 * be working fine, something running into a situation where both VARA modems
+	 * are stuck on Rx, and nothing is happening, got VARA working 95% I think.
+	 *
+             txActive = (vara_ptt != 0);
+	 */
+
+	  txActive = (vara_buffer > 0);	/* give this a try instead */
 #endif
           break;
    }

@@ -63,6 +63,9 @@
 /* 30Aug2020, Maiko (VE4KLM), Seriously time to extend BID limitation !!! */
 #include "j2base36.h"
 
+/* 06Jul2021, Maiko (VE4KLM), Scripting via forward.bbs mechanism */
+#define J2_SCRIPT_VIA_FORWARD_FILE
+
 #define J2_COMMENT_ALLOWED_FWDCONN	/* 29Jun2016, Maiko, Permanent fix */
 
 extern long UtcOffset;
@@ -1481,6 +1484,9 @@ static struct cmds cfwdcmds[] = {
 #ifdef FWDFILE
     { "file",         openconn,       0, 0, NULLCHAR },
 #endif
+#ifdef  EA5HVK_VARA
+    { "vara",           openconn,       0, 0, NULLCHAR },
+#endif
     { NULLCHAR,		NULL,		0, 0, NULLCHAR }
 };
 
@@ -1567,6 +1573,10 @@ void *v1, *v2;
     char *cc, *cp, op;
     struct mbx *m;
     int32 timeout;
+#ifdef  J2_SCRIPT_VIA_FORWARD_FILE
+    int script;
+    FILE *script_fp;
+#endif
 
 #ifdef	WINLINK_SECURE_LOGIN
 #ifdef	DONT_COMPILE	/* 20June2020, Maiko (VE4KLM), now configured with calls list code */
@@ -1607,6 +1617,50 @@ void *v1, *v2;
 	}
 	else	
 	{
+#endif
+
+#ifdef	J2_SCRIPT_VIA_FORWARD_FILE
+	/*
+	 * 06Jul2021, Maiko (VE4KLM), Modifying the use of forward.bbs to allow
+	 * sysops to connect to a remote system, and then just run a series of
+	 * commands (to collect information on routing and nodes) and save the
+	 * information to a file for parsing afterwards -  Charles (N2NOV) was
+	 * asking me for this. Saves me from having to write it from scratch.
+	 *
+	 * Scripts will be identified with a trailing _script, ie :
+	 *
+          -------
+          n2nov_script
+          ax25 newyork n2nov-4
+          .nr
+          +>
+          *5
+          -------
+          k5dat_script
+          net k5dat-7
+          .ro
+          +>
+          *5
+          -------
+	 *
+	 * Note : BPQ has the RO command, JNOS has the NR command, both provide
+	 * some form of netrom routing information to any BBS user connecting.
+ 	 *
+	 * This is somewhat rudemamentary, nothing fancy, we can build on it.
+	 */
+
+	script = 0;
+	script_fp = (FILE*)0;
+
+	if (strstr (m->name, "_script"))
+	{
+		/* 06Jul2021, Maiko (VE4KLM), Log responses from remote to some dat file */
+		char *sfn = malloc (strlen (m->name)+5);
+		sprintf (sfn, "%s.dat", m->name);
+		script = 1;
+		script_fp = fopen (sfn, WRITE_TEXT);
+		free (sfn);
+	}
 #endif
     	/* open the connection, m->user will be the new socket */
     	if(cmdparse(cfwdcmds,cc,(void *)m) == -1)
@@ -1697,6 +1751,18 @@ void *v1, *v2;
                		rval = recvline(m->user,m->line,MBXLINE);
                		j2alarm(0);
 
+#ifdef	J2_SCRIPT_VIA_FORWARD_FILE
+					if (script && op == '*')
+					{
+						if (rval < 0)
+							break;
+
+						if (script_fp)
+							fputs (m->line, script_fp);
+
+						continue;
+					}
+#endif
             	/* Did we timeout, or connection disappear ? */
                 	if(Mtrace)
 					{
@@ -1797,6 +1863,18 @@ void *v1, *v2;
     }
     if(Mtrace)
         PRINTF("fwd: %s, script done\n",m->name);
+
+#ifdef	J2_SCRIPT_VIA_FORWARD_FILE
+/* 06Jul2021, Maiko (VE4KLM), using forward.bbs mechanism to script remote commands */
+	if (script)
+	{
+		log (m->user, "just running commands, no forwarding");
+		exitfwd (m);
+		if (script_fp)
+			fclose (script_fp);
+        	return;
+	}
+#endif
   
 #ifdef FWDFILE
     if (m->family == AF_FILE) {   /* forwarding to a file? */
@@ -2047,6 +2125,10 @@ void *p;
     int len, narg;
     char *remote;
 
+#ifdef  EA5HVK_VARA
+   extern int vara_connect (char *src, char *dst);     /* access mode function (vara.c) */
+#endif
+
 /* 12Jun2016, Maiko (VE4KLM), Default to original JNOS functionality */
 #ifdef	JNOS_DEFAULT_NOIAC
 /* #warning "default NO IAC processing in affect" */
@@ -2061,7 +2143,25 @@ void *p;
         return -1;
     }
     remote = argv[1];
-    switch(*argv[0]) {
+    switch(*argv[0])
+    {
+#ifdef  EA5HVK_VARA
+       /*
+        * 01Sep2021, Maiko, the vara connect should be in this function, and
+        * we should pull both source and destination calls from forward.bbs,
+        * and making sure the proper number of arguments actually exists.
+        */
+        case 'v':
+             if (argc < 3)
+             {
+                     log (-1, "syntax error in forward.bbs - use 'vara src dst'");
+                     return -1;
+             }
+             m->user = vara_connect (argv[1], argv[2]);
+             return m->user; /* immediately exit !!! socket comes from external connect */
+             break;
+#endif
+
         case 't':
             sp.in->sin_family = AF_INET;
             if((sp.in->sin_addr.s_addr = resolve(argv[1])) == 0) {

@@ -1,0 +1,476 @@
+
+                       JNOS release 2.0m.5Gz - VARA Modem IP Bridge (PPP) Support
+
+                             by Maiko Langelaar / VE4KLM
+
+        This document details a brand new interface for EA5VHK VARA modems, a
+       prototype interface that should be considered experimental for starters,
+        and still under development, since it just came out mid January, 2021.
+
+                 Copyright (C) 2004-2021 by Maiko Langelaar / VE4KLM
+
+                This is a living document, started on January 24, 2021
+
+                        Last updated on September 12, 2021
+
+                   Document Version : JNOS-2-0m-5Gz-VARA-12-Sep-2021
+
+<< page break >>
+
+ 5.10) EA5HVK VARA HF and VARA FM Software Modems
+
+  5.10.1) How to update and compile JNOS to do this
+
+  5.10.2) Configuration
+
+  5.10.3) Telling the Windows PC how to route back to JNOS
+
+  5.10.4) Running JNOS and watching the main log file
+
+  5.10.5) Telling the VARA modem what to do
+
+  5.10.6) Configuring the other side
+
+  5.10.7) How to use this
+
+  5.10.8) Remote controlling your serial port RTS based PTT
+
+   5.10.8.1) Disclaimer, the dangers of RTS for PTT
+
+   5.10.8.2) Compiling JNOS to support this feature
+
+   5.10.8.3) The PERL based UDP listener for Windows PC
+
+<< page break >>
+
+
+ 5.10) EA5HVK VARA HF and VARA FM Software Modems
+       ------------------------------------------
+
+   In early January of 2021, I got an email asking if an interface could be
+   written for the VARA modem, so by mid January I actually got a prototype
+   completed, tested, and code made available on the RSYNC area.
+
+   This interface is written as an IP bridge, using PPP, it is not an access
+   mode, which it started off as, but the fact of having to use a host mode
+   style of interface (it's not really host mode) no longer appealed to me,
+   there's a history to that, and there were other technical challenges to
+   deal with, like flow control for instance, anyways a mute point now.
+
+   September 2021 : Access mode is now available (still experimental), you
+   can see the demonstration videos on my youtube channel, please refer to
+   the release history and the J2ADDENDUM.TXT document on access mode.
+
+   NOTE : being this is an IP brigde, you will need JNOS on both ends.
+
+     JNOS (local)                                      JNOS (remote)
+       VARA modem        <--->  HF or FM  <--->       VARA modem 
+         RADIO                                          RADIO
+
+      San Jose :]                                      Winnipeg
+
+     telnet|ping 172.16.72.4                   telnet|ping 172.167.72.1
+
+   This took me less then a day to incorporate PPP into the driver, it just
+   seemed to fit in nicely with the VARA softare, it is actually unreal how
+   easy this was to do, no joke ! This is still a prototype, so consider it
+   still under development. Documentation is by example only at this time.
+
+   I'm not quite sure this is how SCS do their Pactor IP Bridge system, but I
+   had read somewhere some time ago that PPP was part of it, could be wrong.
+
+   Thanks to a couple of guys in Southern California for pushing me on this :]
+
+   You can download the VARA HF and VARA FM from the following website :
+
+     https://rosmodem.wordpress.com
+
+   NOTE : VARA is shareware, the trial version works but is speed limited
+
+ 5.10.1) How to update and compile JNOS to do this
+         -----------------------------------------
+
+   Create an empty directory, then cd into it, then run :
+
+     rsync  -av  www.langelaar.net::jnos2  .
+
+   The latest VARA code is now part of the rsync area, no more tar files to extract.
+
+   IF you have an existing config.h file, you can use it, but make sure these are set :
+
+     #define EA5HVK_VARA
+
+     #define PPP
+
+   The first is brand new, the second is there already, but usually defaults to #undef
+
+   If you are doing this from scratch, then edit config.h.default, it will get copied
+   to config.h for you when you run the configure script below.
+
+   Run the configuration script first :
+
+     ./configure
+
+   Lastly, run 'make' to generate the 'jnos' executable, then copy it to your /jnos runtime area.
+
+ 5.10.2) Configuration
+         -------------
+
+   Having some experience with JNOS is almost essential here, despite the fact I hate saying
+   it, but this is not off the shelf software, lots it may look like network switch commands
+   for that matter. Even after 16+ years of working with it, I am still learning how to use.
+
+   This is the configuration I put together to test the prototype, there's very little you
+   will need to change in it to get it working, and I have tried to keep the configuration
+   as minimal as possible. The nice thing about this is the JNOS configurations are almost
+   identical on both ends of the circuit, so I will present just one side first, followed
+   by some notes on what to change after you copy the configuration to the other end.
+
+   1) As root user, enable IP forwarding in linux :
+
+        echo 1 > /proc/sys/net/ipv4/ip_forward
+
+      This is needed by JNOS so it can network with linux and beyond.
+
+      Note : only needs to be done ONCE at linux boot time.
+       (make it part of the linux startup configuration)
+
+   2) As root user, create a TUN interface in linux :
+
+        ip tuntap add mode tun dev tun5
+
+        ifconfig tun5 192.168.4.200 pointopoint 192.168.4.201 mtu 1500 up
+
+      This is needed by JNOS so it can network with linux and beyond.
+
+      Note : only needs to be done ONCE at linux boot time.
+       (make it part of the linux startup configuration)
+
+   3) Create a JNOS runtime directory, and a non-root user to run JNOS :
+
+       useradd jnos --base-dir /jnos
+
+      The /jnos directory is the top directory for all JNOS files.
+
+      You can run JNOS as root if you like, then you don't need the user,
+      BUT with all the latest concerns about exploitation of stack buffer
+      overflow vunerabilities, it's best to keep away from this practice.
+      
+   4) As the JNOS user, create a new file called 'autoexec.nos' under the
+      top directory, make sure it contains all of the following entries :
+
+        # Maximize TCP performance (probably don't need this section, but)
+
+        tcp mtu 1500
+        tcp mss 1460
+        tcp window 65159
+
+        # Attach networking to linux and beyond
+
+        attach tun tun0 1500 0 tun5
+
+        ifconfig tun0 ipaddress 192.168.4.201
+        ifconfig tun0 netmask 255.255.255.0
+        ifconfig tun0 mtu 1500
+
+        # Your Callsign
+
+        hostname ve4klm
+        ax25 mycall ve4klm
+
+        # Start telnet server if you want to telnet to JNOS itself
+
+        start telnet
+
+	#
+	# Make sure IP BRIDGE mode is enabled for VARA - New as of Sep 12, 2021 !
+	#  (you can not use access mode if you have this enabled, for now anyways)
+	#
+
+	varacmd ipbridge
+
+        # Attach networking to VARA mode
+
+        attach vara vara0 1500 10.8.10.6 8300
+
+        ifconfig vara0 ipaddress 172.16.72.1
+        ifconfig vara0 netmask 255.255.255.0
+        ifconfig vara0 mtu 1500
+
+        route add 172.16.72.0/24 vara0
+
+        # JNOS DEFAULT ROUTE - important to get to linux and beyond
+
+        route addprivate default tun0
+
+	# Disable Multifactor Authentication on any telnet to JNOS itself
+
+        mbox MFAexclude 127.0 172.16.72
+
+   5) Adjust the above 'autoexec.nos' file to your environment :
+
+       Please make sure to use YOUR callsign, not mine (ve4klm)
+
+       Change the 10.8.10.6 in the above 'attach vara' entry to the actual
+       IP address of your Windows PC which runs the VARA modem software.
+
+   6) As the JNOS user, create a new file called 'vara.nos' under the
+      top directory, make sure it contains the following entries :
+
+        pause 2
+        varacmd "mycall ve4klm"
+        pause 2
+        varacmd "listen on"
+
+     NOTE : the 'pause 2' are very important at the start, and also between
+     any vara command sequences, notice the commands are all encased in double
+     quotes, that too is important (for now), you can add other commands such
+     as varacmd bw2300, varcmd "compression on", whatever is available.
+
+      JNOS will automatically run the commands in this file when it has
+      successfully established a connection with the VARA modem software,
+      so you can think of this as modem initialization commands.
+
+     Note : Sometimes the TCP comms get's flakey, so you may have to restart
+     the vara modem or JNOS for that matter, or try varacmd reset, you can tcp
+     reset the control blocks from JNOS console, I mean this stuff is 95% now,
+     but sometimes it gets wierd on me. A work in progress ...
+
+   7) Adjust the above 'vara.nos' file to your environment :
+
+       Please make sure to use YOUR callsign, not mine (ve4klm)
+
+   8) As the JNOS user, create a new file called 'ppp.nos' under the
+      top directory, make sure it contains the following entries :
+
+        ppp vara0 lcp timeout 60000
+        ppp vara0 lcp open
+        ppp vara0 ipcp timeout 60000
+        ppp vara0 ipcp open
+
+        route add 172.16.72.0/24 vara0
+
+      JNOS will automatically run the commands in this file when the VARA
+      modem has successfully established a RADIO CONNECTION with the system
+      on the other end. These are commands to initialize the PPP interface
+      which allows the magic of IP to happen over a VARA modem connection.
+
+      The route command at the end allows you to change what networks you
+      want routed through the VARA radio link overriding whatever initial
+      route may have been define in the 'autoexec.nos' file earlier.
+
+      Note : the routing part is a challenge I need to better figure out.
+
+   9) Adjust the above 'ppp.nos' file to your environment :
+
+      For the prototype there is really nothing to change, but this file would
+      certainly allow you to play with ppp options, such as authentication ?
+
+ 5.10.3) Telling the Windows PC how to route back to JNOS
+         ------------------------------------------------
+
+   It is very important to configure a persistent route on the Windows
+   PC that tells it how to get back to JNOS, since JNOS is actually on
+   the linux host, and not directly on the LAN the linux host sits on.
+
+   So for example, both linux and your Windows PC are on the same LAN,
+   with linux set to 192.168.100.162, and Windows as 192.168.100.102,
+   so on the Windows PC, you would configure a route back to JNOS as
+   follows (using an elevated command prompt) :
+
+      route add /p 192.168.4.201 192.168.100.162
+
+   The /p option makes it permanent so Windows remembers on reboot.
+
+   Without this route, Windows will have NO idea how to reach JNOS.
+
+ 5.10.4) Running JNOS and watching the main log file
+         -------------------------------------------
+
+   On my development system I have two xterms, one for JNOS, one for logging :
+
+      xterm 1                          xterm 2
+      -------                          -------
+
+      su - jnos                        tail -f /jnos/logs/24Jan21
+      cd /jnos
+      ./jnos
+
+   All operations for this prototype are 'log based', so that's what you need
+   to watch to figure stuff out. I have seen sometimes VARA Modem software does
+   not connect both command and data streams at the same time, depends if I had
+   to restart the modem or something got disconnected. Sometimes the vara.nos
+   has to be manually run. You will see in the logs sometimes it might say the
+   modem is offline, meaning the commands did not get sent, so do it manually.
+
+   NOTE : the vara.nos and ppp.nos commands still 'log' to the JNOS console, I
+          have not had a chance to update the code, thanks for your patience.
+
+ 5.10.5) Telling the VARA modem what to do
+         ---------------------------------
+
+   Commands are sent to the VARA modem using the JNOS command 'varacmd'. It is
+   very simplistic right now. Inside of double quotes, you can send any command
+   documented in the VARA tnc manual to the software modem.
+
+   For example, to establish a RADIO link between myself and remote system :
+
+     varacmd "connect ve4klm wq6n"
+
+   Other commands to know are as follows :
+
+     varacmd debug             not sent to modem, JNOS log file debug
+     varacmd disconnect        properly terminate current RADIO link	      		
+     varacmd abort             force termination of RADIO link
+     varacmd "listen on"       need this if you want to ACCEPT incoming RADIO link
+
+   Again, and I apologize for this, you need to watch the logs :|
+
+ 5.10.6) Configuring the other side
+         --------------------------
+
+   The configurations on both ends are almost identical, so all you have to do is
+   copy the local configuration you just created, to the remote side, and change 3
+   entries in 'autoexex.nos,' and one entry in 'vara.nos'. Leave 'ppp.nos' as is.
+
+    autoexec.nos
+    -------------
+
+     Change callsign of 'hostname' and 'ax25 mycall entries
+
+     Change IP address used in the 'attach vara vara0' entry
+
+     Change IP address of 'ifconfig vara0 entry to 172.16.72.4
+
+    vara.nos
+    --------
+
+     Change the callsign used in the "mycall" entry
+
+ 5.10.7) How to use this
+         ---------------
+
+   Now comes the 'fun' part :]
+
+   With JNOS and VARA modems running, and their respective intefaces active,
+   just get one side to try and connect to the other side, example again :
+
+     varacmd "connect ve4klm wq6n"
+
+   Watch the logs, let the PPP sync up, it can take a moment, then comes the
+   magic time to try a few things :
+
+   Try to ping each other, on the local side :
+
+     ping 172.16.72.4
+
+   On the remote side :
+
+     ping 172.16.72.1
+
+   Replace the 'ping' with 'telnet' and see what happens.
+
+   Make sure you have an ftpusers file setup so that you can login :
+
+    root@slackware:/tmp/tmp/rte# cat ftpusers
+    ve4klm mypassword /jnos/public 0x0407f
+    univperm * /jnos/public 8
+
+   The ftpusers file is in the JNOS top directory as well.
+
+  5.10.8) Remote controlling your serial port RTS based PTT
+          -------------------------------------------------
+
+   The VARA modem has no 'direct' old school PTT control that I can see, which
+   requires an operator to purchase a modern controller boards or interface.
+
+   I'm a bit old school, and still have serial ports on my Windows PC, and I
+   actually use the RTS line still to trigger the PTT on my older rigs, works
+   really good (for me anyways, and I have other software modems I use).
+
+   The challenge however is that my JNOS system is running on a linux box
+   physically separated from the Windows PC running the VARA modem and other
+   software modems like WinRPR, Multipsk, FLdigi, and so on ...
+
+   My solution was to install Strawberry PERL on my Windows PC, and write a
+   very simple perl based UDP listener program to control the RTS line, based
+   on what it receives from my JNOS system. JNOS receives PTT status from the
+   VARA modem software, so all it has to do is pass it on to the UDP listener
+   which does the rest.
+
+   This is very rudamentary ! I will clean it up over the next while. The COM
+   port is hardcoded to COM1 in the perl script, so edit to your needs. The IP
+   address of the Windows PC is taken from the 'attach vara' entry in your
+   autoexec.nos - I would think one would use the serial port on the same
+   Windows PC that is running the VARA software modem (sounds reasonable).
+
+   5.10.8.1) Disclaimer - the DANGER of using RTS for PTT
+             --------------------------------------------
+
+   There is a RISK that RTS will go high when you exit the perl program, so
+   please pay attention, disconnect the PTT to the rig before you exit the
+   script. This is the only thing that has really been a thorn in my side
+   with regard to using an RTS based PTT setup :|
+
+   This applies to not just the PERL script, I see this happen when WinRPR
+   exits, and years ago I burned out a Data Radio because my JNOS had gone
+   crash and I was using it with soundmodem, and it took me 10 minutes to
+   realize my PTT was still on (didn't have LED indicators at the time).
+    (it was a crappy day, those radios are not cheap)
+
+   I need to find a better circuit, but keeping it 'cheap' ...
+
+   WARNING : The script says this already, but I am not responsible for
+   anyone burning out their TX due to sustained PTT or whatever.
+
+   5.10.8.2) Compiling JNOS to support this feature
+             --------------------------------------
+
+   In order for JNOS to make use of this script, you will need an additional
+   definition added to your config.h (or config.h.default) in setion 5.10.1,
+   when you update and compile your JNOS :
+
+      #define REMOTE_RTS_PTT
+
+   5.10.8.3) The PERL based UDP listener for Windows PC
+             ------------------------------------------
+
+   The udpPTT.txt file (perl program) is included in the varadev.tar file
+   from under the rsync area, just copy that file to your Windows PC that
+   most likely also has your VARA modem running on it.
+
+   WARNING : COM port is hard coded to COM1, edit to your preference.
+
+   Get the latest Strawberry PERL for windows (free) and run the script :
+
+     perl udpPTT.txt
+
+   DANGER : there is a RISK that RTS will go high when you exit the perl
+   program, so please pay attention, disconnect the PTT to the rig before
+   you exit the script. This is the only thing that has really been a thorn
+   in my side with regard to using an RTS based PTT setup :|
+
+   Do not leave your system unattended if you are using this remote RTS
+   PTT feature. It is very experimental and something I slapped together,
+   it does what I want, it will evolve. Suggestions are welcome !
+
+   NOTE : I've only tested the PERL script on a Windows 7, 10 is next.
+
+  5.10.9) Other Notes
+          -----------
+
+   That is all I can think of, if you have ideas or comments for this
+   spot, feel free to send them to me @ the following email address :
+
+     Internet : maiko@pcs.mb.ca
+
+       Packet : ve4klm@ve4klm.#wpg.mb.can.noam
+
+     Amprnet System : ve4klm.ampr.org
+
+     Official JNOS 2.0 Webpage : https://www.langelaar.net/jnos2
+
+   Last updated on September 12, 2021
+
+   Copyright (C) 2004-2021 by Maiko Langelaar / VE4KLM
+

@@ -22,7 +22,18 @@
  * N5KNX  950626: NEWGROUPS and DATE added, from G8FSL uknos.
  * N5KNX  960703: minimal news2mail added, influenced by G8FSL uknos.
  * N5KNX  960828: added statnew(), for when NEWNEWS cmd isn't supported.
+ * 
+ * VE4KLM 06Jun2021 - stability mods, checking for null pointers as well as
+ * possible corrupt remote group strings and history file entries. Also the
+ * size of remote group strings received is no longer a concern, the buffer
+ * size is now dynamically allocated, previously was 'char groups[512]', so
+ * that should fix reports of JNOS crashing if it got too many groups.
+ *
+ * VE4KLM 16Jun2021 - the software wars have begun, so now protecting sysops
+ * from themselves, not my choice, but to appease the NNTP police out there.
+ *
  */
+
 #include <time.h>
 #include <stdarg.h>
 #include <ctype.h>
@@ -40,6 +51,7 @@
 #include <io.h>
 #endif
 #include "global.h"
+
 #ifdef NNTPS
 #include "domain.h"
 #include "mbuf.h"
@@ -69,6 +81,8 @@
 #ifdef LZW
 #include "lzw.h"
 #endif
+
+#define	NNTP_ONLY_44NET		/* 16Jun2021, Maiko (VE4KLM), Should be permanent !!! */
   
 FILE *open_file __ARGS((char *name,char *mode,int s,int t));
 FILE *temp_file __ARGS((int s,int t));          /* NMB */
@@ -292,8 +306,6 @@ int s;
         return 0;
     }
   
-  
-  
 /* main message-opening routine
  * returncode: NULLFILE if error; filepointer success */
   
@@ -316,8 +328,6 @@ int s;
   
         return f;
     }
-  
-  
   
 /* file-receiving routine
  * returncode: -1 if error or 'recvline' faults; 0 success; 1 if blank line */
@@ -362,8 +372,6 @@ int s;
             if (!continued) fputc('\n', fp);
         }
     }
-  
-  
   
 /* checks incoming article-id against existing articles
  * returncode: -1 if error; 1 if article exists; 0 no article found.
@@ -417,8 +425,6 @@ int s;
         return retcode;
     }
   
-  
-  
 /* checks for not valid chars in a line
  * returncode: 0 if valid; 1 if invalid */
     static int
@@ -429,8 +435,6 @@ int s;
             return 1;
         return 0;
     }
-  
-  
   
 /* main file-checking routine
  * returncode: -1 if error; 0 success */
@@ -554,8 +558,13 @@ static int do_quit ()
 #endif
         return -1;
     }
-  
-  
+
+/* 07Jun2021, Maiko (VE4KLM), Error logging (cuts duplicate code) */
+void nntp_err_log (int soc, char *msg, char *data)
+{
+	log (soc, "NNTP: %s", msg);
+	log (soc, "[%s]", data);
+}
   
 /* returncode: -1 error; 1 success; 0 no entry */
   
@@ -579,8 +588,17 @@ static int do_quit ()
             if (strcspn(line," ") != strlen(group))
                 continue;
   
-            if (strnicmp(group,line,strlen(group)) == 0) {
-                cp = (strchr(line,' ')) + 1;
+            if (strnicmp(group,line,strlen(group)) == 0)
+	    {
+		/* 07Jun2021, Maiko (VE4KLM), Adding more error checks */
+                // cp = (strchr(line,' ')) + 1;
+                cp = strchr(line,' ');
+		if (cp == NULLCHAR)
+		{
+			nntp_err_log (mp->s, "get_path, missing delimiter", line);
+			continue;
+		}
+		cp++;
 		if ((cp1 = strchr(cp, ' ')) != NULLCHAR)
                     *cp1 = '\0';  /* drop date created */
   
@@ -596,8 +614,6 @@ static int do_quit ()
         fclose(f);
         return 0;
     }
-  
-  
   
 /* checkes if path to given article exists
  * returncode: -1 error; 1 success; 0 no path */
@@ -623,8 +639,18 @@ static int do_quit ()
             if (strcspn(line," ") != strlen(p))
                 continue;
   
-            if (strnicmp(p,line,strlen(p)) == 0) {
-                p = (strchr(line,' ')) + 1;
+            if (strnicmp(p,line,strlen(p)) == 0)
+	    {
+		/* 07Jun2021, Maiko (VE4KLM), Adding more error checks */
+                // p = (strchr(line,' ')) + 1;
+                p = strchr(line,' ');
+		if (p == NULLCHAR)
+		{
+			nntp_err_log (-1, "get_path2, missing delimiter", line);
+			continue;
+		}
+		p++;
+
 		if ((cp1 = strchr(p, ' ')) != NULLCHAR)
                     *cp1 = '\0';  /* drop date created */
   
@@ -640,8 +666,6 @@ static int do_quit ()
         fclose(f);
         return 0;
     }
-  
-  
   
 /* returncode: -1 if error; 1 success; 0 no pointer */
   
@@ -666,8 +690,15 @@ static int do_quit ()
             if (strcspn(line," ") != strlen(group))
                 continue;
   
-            if (strnicmp(group,line,strlen(group))==0) {
+            if (strnicmp(group,line,strlen(group))==0)
+	    {
+		/* 07Jun2021, Maiko (VE4KLM), Adding more error checks */
                 p = strchr(line,' ');
+		if (p == NULLCHAR)
+		{
+			nntp_err_log (mp->s, "get_pointer, missing delimiter", line);
+			continue;
+		}
                 mp->last = (unsigned)atoi(p);
                 p++;
                 mp->first = (unsigned)atoi(strchr(p,' '));
@@ -679,8 +710,6 @@ static int do_quit ()
         fclose(f);
         return 0;
     }
-  
-  
   
 /* creating path to a new newsgroup
  * handling of "." and "\" in pathnames especially MSDOS */
@@ -770,24 +799,52 @@ static int doerrxit ()
                 break;
   
             a->ap->tmpu = strcspn(a->buf," ");
+		/* 07Jun2021, Maiko (VE4KLM), Not sure I would call this an error check, but makes sense still */
+		if ((a->ap->tmpu) < 1)
+		{
+			nntp_err_log (a->s, "update_list, missing delimiter", a->buf);
+			continue;
+		}
             strncpy(l2,a->buf,a->ap->tmpu);
             l2[a->ap->tmpu] = '\0';
   
-            p = strrchr(a->buf,' ') + 1;    /* the char after the last space */
+		/* 07Jun2021, Maiko (VE4KLM), Adding more error checks */
+            //p = strrchr(a->buf,' ') + 1;    /* the char after the last space */
+            p = strrchr(a->buf,' ');
+		if (p == NULLCHAR)
+		{
+			nntp_err_log (a->s, "update_list, missing delimiter", a->buf);
+			continue;
+		}
+			p++;
             if (*p == 'n') {            /* posting to this group not allowed */
                 fputs(a->buf,t);
                 continue;
             }
   
-            if (strcmp(p1,l2) == 0) {
-                p = strchr(a->buf,' ') + 1;
+            if (strcmp(p1,l2) == 0)
+	    {
+		/* 07Jun2021, Maiko (VE4KLM), Adding more error checks */
+                //p = strchr(a->buf,' ') + 1;
+                p = strchr(a->buf,' ');
+		if (p == NULLCHAR)
+		{
+			nntp_err_log (a->s, "update_list, missing delimiter", a->buf);
+			continue;
+		}
+		p++;
                 a->ap->number = (unsigned)atoi(p);
                 (a->ap->number)++;
                 p = strchr(p,' ');
+		/* 07Jun2021, Maiko (VE4KLM), Adding more error checks */
+		if (p == NULLCHAR)
+		{
+			nntp_err_log (a->s, "update_list, missing delimiter", a->buf);
+			continue;
+		}
                 fprintf(t,"%s %5.5u%s",p1,a->ap->number,p);
             } else
                 fputs(a->buf,t);
-  
         }
   
         fclose(f);
@@ -827,8 +884,6 @@ static int doerrxit ()
         return (a->ap->number);
     }
   
-  
-  
 /* returncode: -1 error; 0 success */
   
     static int
@@ -849,10 +904,19 @@ static int doerrxit ()
                 return 0;
   
             if (blank_line_flag)
-                if (strnicmp(mp->buf,pth,5) == 0) {
-                    p = strchr(mp->buf,' ') + 1;
+                if (strnicmp(mp->buf,pth,5) == 0)
+				{
+                    //p = strchr(mp->buf,' ') + 1;
+                    p = strchr(mp->buf,' ');
+		/* 07Jun2021, Maiko (VE4KLM), Adding more error checks */
+		if (p == NULLCHAR)
+			nntp_err_log (mp->s, "dup_f, missing delimiter", mp->buf);
+		else
+		{
+					p++;
                     fprintf(out,"%s%s!",pth,Host);  /* making longer line, */
                     fputs(p, out);     /* so allow for total len > LineLen */
+		}
                     continue;
                 }
   
@@ -873,8 +937,6 @@ static int doerrxit ()
                 blank_line_flag = 0;
         }
     }
-  
-  
   
 /* returncode: < 1 if error; 1 success */
   
@@ -1027,15 +1089,32 @@ static int do_quit2 (FILE *history, char *from, char *group, struct nntpsv *mp)
   
             rip(line);
   
-            if (strnicmp(line,frm,6) == 0) {
-                p = strchr(line,' ') + 1;
+		/* 07Jun2021, Maiko (VE4KLM), Darn it, there's tons of these strchr without error checks !!! */
+            if (strnicmp(line,frm,6) == 0)
+			{
+                //p = strchr(line,' ') + 1;
+                p = strchr(line,' ');
+		if (p == NULLCHAR)
+		{
+			nntp_err_log (mp->s, "xfer_article2, missing delimiter", line);
+			continue;
+		}
+				p++;
                 from = j2strdup(p);
                 if (group != NULLCHAR) break;
                 continue;
             }
   
-            if (strnicmp(line,ngrps,12) == 0) {
-                p = strchr(line,' ') + 1;
+            if (strnicmp(line,ngrps,12) == 0)
+			{
+                //p = strchr(line,' ') + 1;
+                p = strchr(line,' ');
+		if (p == NULLCHAR)
+		{
+			nntp_err_log (mp->s, "xfer_article2, missing delimiter", line);
+			continue;
+		}
+				p++;
                 group = j2strdup(p);
                 if (from != NULLCHAR) break;
                 continue;
@@ -1519,8 +1598,6 @@ static void do_quit3 (FILE *pf, struct nntpsv *cb, struct Servers *sp)
         return 1;
     }
   
-  
-  
 /* converts timestring to unix-compatible structure
  * str -> YYMMDD HHMMSS [GMT]
  * returncode: 0 (!!) if error; > 0 success */
@@ -1709,10 +1786,11 @@ static int do_quit4 (int all, struct g_list *histp, struct g_list *ngp,
   
     {
         register int i,j;
-        char *cp, *cp1, line[LineLen], groups[LineLen];
+        char *cp, *cp1, line[LineLen];
+	char *groups; /* 06Jun2021, Maiko (VE4KLM), replaces groups[LineLen]; */
         struct g_list *ng, *hist, *ngp=NULLG, *histp=NULLG, *ptr;
         FILE *f1;
-        int all=1, newsavail=0;
+        int all=1, newsavail=0, len = 0;
   
         if (check_spaces(string,2) == -1)
             return -1;
@@ -1724,9 +1802,26 @@ static int do_quit4 (int all, struct g_list *histp, struct g_list *ngp,
             i++;
         if (strlen(cp) < 13)
             return -1;
-  
-        strncpy(groups,string,i-1);
+
+	/*
+	 * 06Jun2021, Maiko (VE4KLM), no more local buffer having
+	 * a hardcoded length at compile time, this is better way,
+	 * so we don't have to worry about buffer overflows, etc.
+	 *  (and make sure to free groups pointer - done later)
+	 *
+	 * The log entry is just because I am curious now ...
+	 *
+	 * 09Jun2021, Maiko (VE4KLM), bump logging up to 500+
+	 */
+	len = strlen (string);
+
+	if (len > 500 || i > 500)
+		log (mp->s, "large remote group string %d (%d)", len, i);
+
+	groups = malloc (i);
+	memcpy (groups, string, i-1);
         groups[i-1] = '\0';
+
         if(strcmp(groups,"*") != 0)
             all = 0;
   
@@ -1744,12 +1839,20 @@ static int do_quit4 (int all, struct g_list *histp, struct g_list *ngp,
             cp = groups;
   
             for (;;) {
+
                 if ((cp1 = strchr(cp,',')) == NULLCHAR ) {
                     ng->str = j2strdup(cp);
                     ng->next = NULLG;
                     break;
                 }
                 j = strcspn(cp,",");
+		/* 06Jun2021, Maiko (VE4KLM), perhaps the COMMA is missing (or corrupt stream) ? */
+		if (j < 1)
+		{
+			nntp_err_log (mp->s, "remote groups, missing delimiter", groups);
+			break;
+		}
+
                 ng->str = (char *)callocw(1,j+1);
                 strncpy(ng->str,cp,j);
                 ng->str[j] = '\0';
@@ -1762,6 +1865,8 @@ static int do_quit4 (int all, struct g_list *histp, struct g_list *ngp,
                     break;
             }
         }
+
+	free (groups);	/* 06Jun2021, Maiko (VE4KLM), no more local buffer */
   
         if ((f1 = open_file(History,READ_TEXT,0,1)) == NULLFILE)
 			return (do_quit4 (all, histp, ngp, mp, newsavail));
@@ -1781,7 +1886,37 @@ static int do_quit4 (int all, struct g_list *histp, struct g_list *ngp,
                 }
 
                 for(i = 3, cp = line; i; --i)
-                    cp = strchr(cp,' ') + 1;
+		{
+                    cp = strchr(cp,' ');
+		/*
+		 * 06Jun2021, Maiko (VE4KLM), People should be checking for null
+		 * pointers on the strchr() call, never mind not on 'that + 1'.
+		 *
+		 * Could a 'bad' history file entry be causing a crash ? Confirmed
+		 * by Jean later in the evening - note the lack of a space delimiter
+		 * between the 161020 and ampr.check in the log submission below :
+		 *
+           21:49:21  44.76.0.194:1096 - large remote group string 418 (405)
+           21:49:22  44.76.0.194:1096 - history file - missing space delimiter, corrupt entry ?
+           21:49:22  44.76.0.194:1096 - entry [<16804680@jnos.ve2pkt.ampr.org> 210604 161020ampr.check/89]
+		 *
+		 * Question is WHY or HOW did it make it to the history file ?
+		 *
+ 		 * Thanks Jean (VE2PKT) for reporting this, for all your GDB dumps,
+		 * and for spending your 'entire day' testing the new code :]
+		 */
+			if (cp == NULLCHAR)
+				break;
+                    cp++;
+		}
+
+		/* 06Ju2021, Maiko (VE4KLM), check for NULL, corrupt entry will crash */
+		if (cp == NULLCHAR)
+		{
+			nntp_err_log (mp->s, "history entry, missing delimiter", line);
+			continue;
+		}
+
                 histp = (struct g_list *)callocw(1,sizeof(struct g_list));
                 hist = histp;
   
@@ -1793,6 +1928,12 @@ static int do_quit4 (int all, struct g_list *histp, struct g_list *ngp,
                     }
   
                     j = strcspn(cp," ");
+		/* 06Jun2021, Maiko (VE4KLM), perhaps the space is missing */
+		if (j < 1)
+		{
+			nntp_err_log (mp->s, "history entry, missing delimiter", line);
+			break;
+		}
                     hist->str = (char *)callocw(1,j+1);
                     strncpy(hist->str,cp,j);
                     hist->str[j] = '\0';
@@ -1804,7 +1945,15 @@ static int do_quit4 (int all, struct g_list *histp, struct g_list *ngp,
                     continue;
             }
 
-            cp = strchr(line,' ') + 1;
+            //cp = strchr(line,' ') + 1;
+            cp = strchr(line,' ');
+	if (cp == NULLCHAR)
+	{
+			nntp_err_log (mp->s, "history entry, missing spaces", line);
+			break;
+	}
+	cp++;
+
             if ((mp->ftime = make_nntime(mp->datest,mp->timest,cp)) == 0) {
                 break;  /* bad syntax in History file */
             }
@@ -1887,7 +2036,6 @@ static int do_quit4 (int all, struct g_list *histp, struct g_list *ngp,
         return 0;
     }
 
-
 /* handles incoming newnews-cmd
  * returncode: -1 if error; 0 no groups or bad syntax; 1 success */
   
@@ -1965,10 +2113,6 @@ static int do_quit4 (int all, struct g_list *histp, struct g_list *ngp,
         }
     }
   
-  
-  
-  
-  
 /* checks if newsgroup is selected
  * returncode: -1 no group selected; 0 success */
   
@@ -1982,8 +2126,6 @@ static int do_quit4 (int all, struct g_list *histp, struct g_list *ngp,
         }
         return 0;
     }
-  
-  
   
 /* get id-number of message
  * returncode: 0 if no message-id; 1 success */
@@ -2023,8 +2165,6 @@ static int do_quit4 (int all, struct g_list *histp, struct g_list *ngp,
         return 0;
     }
   
-  
-  
 /* gets next news of newsgroup
   
  * returncode: -1 if error; 0 no news; 1 success */
@@ -2055,7 +2195,6 @@ static int do_quit4 (int all, struct g_list *histp, struct g_list *ngp,
             }
         }
     }
-  
   
 /* gets last news of newsgroup
   
@@ -3449,7 +3588,10 @@ static void do_quit7 (struct nntpsv *mp)
     void *p;
     {
         struct Servers *np;
-  
+
+#ifdef	NNTP_ONLY_44NET
+	char *destA;	/* 16Jun2021, Maiko (VE4KLM), protecting sysops from themselves */
+#endif
         for(np = Nntpserver; np != NULLSERVER; np = np->next)
             if(stricmp(np->name,argv[1]) == 0)
                 break;
@@ -3460,6 +3602,32 @@ static void do_quit7 (struct nntpsv *mp)
                 free((char *)np);
                 return -1;
             }
+
+#ifdef	NNTP_ONLY_44NET
+
+		/*
+		 * 16Jun2021, Maiko (VE4KLM), I am getting a LOT of flack because
+		 * of a recent NNTP 'storm' involving direct internet group posting
+		 * with foul language and very inappropriate content, to me this is
+		 * a case of 'sysop not understanding', instead of some saying that
+		 * this is the fault of JNOS 2.0, great 'software wars', whatever.
+		 *
+		 * I suppose I could put in protection such that NNTP servers outside
+		 * the 44 network will not 'be allowed', just to cover my ass, sorry.
+		 *
+		 * And I'll probably get flack for this one too, you just can't win :(
+		 *  (yup, supposedly protecting sysops from themselves)
+		 */
+
+		destA = inet_ntoa (np->dest);
+
+		if (*destA && strncmp (destA, "44", 2))
+		{
+                	tprintf ("Only 44 net servers allowed\n");
+                	free (np);
+                	return -1;
+		}
+#endif
             np->name = j2strdup(argv[1]);
             np->next = Nntpserver;
             Nntpserver = np;
@@ -3795,6 +3963,13 @@ static int do_error_ff (char *line, char *path, struct ffblk *blk)
   
         rip(path);
         cp = strrchr(path,'/');
+		/* 07Jun2021, Maiko (VE4KLM), Adding more error checks */
+		if (cp == NULLCHAR)
+		{
+            tprintf("Missing slash in path %s\n", path);
+			nntp_err_log (-1, "nndump, missing slash in path", path);
+			return (do_error (line, path));
+		}
         strcpy(newsname, cp);
 
         strcpy(line,path);
@@ -4414,8 +4589,6 @@ static int do_done (FILE *f, struct nntpsv *mp, struct session *sp)
   
         return (subcmd(Nntp,argc,argv,p));
     }
-  
-  
   
 /* main file-opening routine
  * options: s = socketnumber, if given an error msg is printed to the socket

@@ -104,8 +104,19 @@
 #define	KLMWAIT kwait
 #endif
 
-/* This is the APRS destination call we use for NOSaprs */
+/*
+ * This is the APRS destination call we use for NOSaprs
+ *
+ * 14Jun2021, Maiko (VE4KLM), Bob Bruninga (WB4APR) was kind enough to
+ * add NOSaprs in his 'tocalls' listing, assigning us the call APN2xx,
+ * and also noting the call APZ000 is used by older JNOS systems.
+ *
+ * Thank you Janusz HF1L (ex.SP1LOP) for suggesting this
+ *
 #define	APRSDC "APZ200"
+ *
+ */
+#define	APRSDC "APN20H"	/* to match the current version of NOSaprs */
 
 /* 02Apr2002, New option to exclude DTI from aprs heard table (now default) */
 extern int dtiheard;

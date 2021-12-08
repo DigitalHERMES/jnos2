@@ -589,7 +589,9 @@ void *p;
             if(
 #endif
 
-               (newaddr = rewrite_address(cp,REWRITE_TO)) == NULLCHAR){
+		/* 16Jun2021, Maiko (VE4KLM), new send specific rules in rewrite, so we need to pass FROM field */
+               //(newaddr = rewrite_address(cp,REWRITE_TO)) == NULLCHAR)
+               (newaddr = rewrite_address_new(cp,REWRITE_TO, mp->from)) == NULLCHAR){
 #ifdef SMTP_REFILE
                 free(cmd);
 #endif
@@ -695,7 +697,9 @@ void *p;
   
             list = NULLLIST;
         /* rewrite address if possible */
-            if((newaddr = rewrite_address(arg,REWRITE_TO)) != NULLCHAR){
+		/* 16Jun2021, Maiko (VE4KLM), new send specific rules in rewrite, so we need to pass FROM field */
+            //if((newaddr = rewrite_address(arg,REWRITE_TO)) != NULLCHAR)
+            if((newaddr = rewrite_address_new(arg,REWRITE_TO, mp->from)) != NULLCHAR){
                 if(!strcmp(newaddr,"refuse")){  /*n5knx: refusal needed? */
                     (void)usprintf(mp->s, Unknown, arg);
                     free(newaddr);
@@ -1978,7 +1982,9 @@ static int firstfield(char *userid, char *DBfile)
         struct list *tolist = NULLLIST;
         char *newaddr, *origaddr;
   
-        if((newaddr = rewrite_address(to,REWRITE_TO)) != NULLCHAR){
+	/* 16Jun2021, Maiko (VE4KLM), new send specific rules in rewrite, so we need to pass FROM field */
+        //if((newaddr = rewrite_address(to,REWRITE_TO)) != NULLCHAR)
+        if((newaddr = rewrite_address_new(to,REWRITE_TO, from)) != NULLCHAR){
             if(!strcmp(newaddr,"refuse")) {
                 free(newaddr);
                 return 1;
