@@ -133,7 +133,7 @@ DUMP= 	trace.o rspfdump.o kissdump.o ax25dump.o arpdump.o nrdump.o \
 UNIX=	unix.o unixasy.o dirutil.o at.o lcsum.o xmodem.o glob.o \
 	dumbcons.o editor.o jlocks.o qsort.o chkstk.o sysevent.o \
 	j2tmpnam.o getusage.o j2KLMlists.o j2strings.o j2base36.o \
-	activeBID.o
+	activeBID.o j2base64.o
 #
 # 26Oct2009, Maiko, Separate compile instructions for modules that
 # need to include curses.h header file. Should not have to parse the

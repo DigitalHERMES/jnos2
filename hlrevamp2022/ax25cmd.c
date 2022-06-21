@@ -418,8 +418,9 @@ int doaxheard (int argc, char **argv, void *p)
 
 	int digid; /* 05Apr2021, Maiko (VE4KLM), new */
 
+#ifdef  BACKUP_AXHEARD
 	char *fileptr;	/* 12Apr2021, Maiko (VE4KLM), now specify backup file */
-
+#endif
 	if (argc < 2)
 		return doaxhusage ();
 
@@ -456,6 +457,8 @@ int doaxheard (int argc, char **argv, void *p)
 	}
 	else	/* 21May2021, Maiko, OOPS, compile fails if BACKUP_AXHEARD not defined */
 #endif
+
+#ifdef KLM_HLREVAMP_2022
 	/*
 	 * 04Mar2022, Maiko, multiple heard lists for the same interface / port !
 	 *
@@ -471,29 +474,52 @@ int doaxheard (int argc, char **argv, void *p)
 	 * created the first time IF they don't exist already, that's the idea.
 	 *
 	 */
-	if (!strcmp (argv[1], "new="))
+	if (!strncmp (argv[1], "new=", 4))
 	{
 		if (argc > 2)
 		{
+			// char *nhlname;
+
 			if ((ifp = if_lookup (argv[2])) == NULLIF)
 			{
 				tprintf (Badinterface, argv[2]);
 				return 1;
 			}
 
+			/* 13Mar2022, Maiko (VE4KLM), I think it's ready for use */
+			hl12m17m30m_switch (ifp, argv[1] + 4);
+
+#ifdef	DON_COMPILE
 			tprintf ("new command coming - multiple heard lists for a single port\n"); 
 
+			nhlname = malloc (strlen (argv[1]) + strlen (argv[2]));
+			sprintf (nhlname, "%s_%s", argv[1] + 4, argv[2]);
+			tprintf ("%s\n", nhlname);
+
 			/* this is just a frame work, feature is in the works */
+#endif
 		}
 		else return doaxhusage ();
 	}
+	else	/* this is an important else, leave it alone */
 
-	else if (!strcmp (argv[1], "dest") || digid)	/* 05Apr2021, Maiko, looking for digi'd calls */
+#endif	/* end of KLM_HLREVAMP_2022 */
+
+	if (!strcmp (argv[1], "dest") || digid)	/* 05Apr2021, Maiko, looking for digi'd calls */
 	{
 		if (argc > 2)
 		{
 			if (strcmp (argv[2], "all"))
 			{
+#ifdef KLM_HLREVAMP_2022
+				/*
+				 * 14Mar2022, Maiko (VE4KLM), Now that heard lists are not
+				 * necessarily a physical interface, we need to check first
+				 * to see if it exists in the new heard list system. Only if
+				 * if it doesn't, then do we check for physical interface.
+				 */
+				if ((ifp = hl12m17m30m_lookup (argv[2])) == (struct iface*)0)
+#endif
 				if ((ifp = if_lookup (argv[2])) == NULLIF)
 				{
 					tprintf (Badinterface, argv[2]);
@@ -547,6 +573,15 @@ int doaxheard (int argc, char **argv, void *p)
 		 */
 		if (strcmp (argv[1], "all"))
 		{
+#ifdef KLM_HLREVAMP_2022
+			/*
+			 * 13Mar2022, Maiko (VE4KLM), Now that heard lists are not
+			 * necessarily a physical interface, we need to check first
+			 * to see if it exists in the new heard list system. Only if
+			 * if it doesn't, then do we check for physical interface.
+			 */
+			if ((ifp = hl12m17m30m_lookup (argv[1])) == (struct iface*)0)
+#endif
 			if ((ifp = if_lookup (argv[1])) == NULLIF)
 			{
 				tprintf (Badinterface, argv[1]);
@@ -579,6 +614,8 @@ int doaxheard (int argc, char **argv, void *p)
 
     return 0;
 }
+
+#ifndef KLM_HLREVAMP_2022
 
 int
 axheard(ifp)
@@ -695,6 +732,127 @@ static int avdest (struct iface *ifp)
     }
     return 0;
 }
+
+#else
+
+/* new revamped heard calls 05Mar2022, Maiko */
+
+int
+axheard(ifp)
+struct iface *ifp;
+{
+    int col = 0;
+    struct lq *lp;
+    char tmp[AXBUF];
+
+    if(ifp->hwaddr == NULLCHAR)
+        return 0;
+  
+    j2tputs("Interface  Station   Time since send  Pkts sent\n");
+    tprintf("%-9s  %-9s   %12s    %7d\n",ifp->name,pax25(tmp,ifp->hwaddr),
+    tformat(secclock() - ifp->lastsent),ifp->rawsndcnt);
+  
+    j2tputs("Station   Time since heard Pkts rcvd : ");
+    j2tputs("Station   Time since heard Pkts rcvd\n");
+    for(lp = ifp->hrdsrc; lp != NULLLQ; lp = lp->next)
+    {
+        if(col)
+            j2tputs("  : ");
+
+        if(tprintf("%-9s   %12s    %7d",pax25(tmp,lp->addr),
+            tformat(secclock() - lp->time),lp->currxcnt) == EOF)
+            return EOF;
+
+        if(col){
+            if(tputc('\n') == EOF){
+                return EOF;
+            } else {
+                col = 0;
+            }
+        } else {
+            col = 1;
+        }
+    }
+    if(col)
+        tputc('\n');
+    return 0;
+}
+
+static int
+axdest(ifp)
+struct iface *ifp;
+{
+    struct ld *lp;
+    struct lq *lq;
+    char tmp[AXBUF];
+  
+    if(ifp->hwaddr == NULLCHAR)
+        return 0;
+    tprintf("%s:\n",ifp->name);
+    j2tputs("Station   Last ref         Last heard           Pkts\n");
+    for(lp = ifp->hrddst; lp != NULLLD; lp = lp->next)
+    {
+        tprintf("%-10s%-17s",
+        pax25(tmp,lp->addr),tformat(secclock() - lp->time));
+  
+        if(addreq(lp->addr,ifp->hwaddr))
+	{
+            /* Special case; it's our address */
+            tprintf("%-17s",tformat(secclock() - ifp->lastsent));
+        }
+	else if((lq = al_NEWlookup(&(ifp->hrdsrc),lp->addr,0)) == NULLLQ)
+            tprintf("%-17s","");
+        else
+            tprintf("%-17s",tformat(secclock() - lq->time));
+
+        if(tprintf("%8d\n",lp->currxcnt) == EOF)
+            return EOF;
+    }
+    return 0;
+}
+
+/*
+ * 05Apr2021, Maiko (VE4KLM), shows digipeated source calls list
+ */
+static int avdest (struct iface *ifp)
+{
+    struct lv *lv;
+    struct lq *lq;
+    char tmp[AXBUF];
+  
+    if(ifp->hwaddr == NULLCHAR)
+        return 0;
+    tprintf("%s:\n",ifp->name);
+    j2tputs("Station   Last Digipeated  Last heard Direct    Pkts  Digipeater\n");
+  /*
+   * 06Apr2021, Maiko, Figuring out new spacing to accomodate digi call
+   *
+             VE4KLM-12 123456789012345671234567890123456700000000  1234567890
+   */
+    for(lv = ifp->hrdvia; lv != NULLLV; lv = lv->next)
+    {
+        tprintf("%-10s%-17s",
+        pax25(tmp,lv->addr),tformat(secclock() - lv->time));
+  
+        if(addreq(lv->addr,ifp->hwaddr))
+	{
+            /* Special case; it's our address */
+            tprintf("%-17s",tformat(secclock() - ifp->lastsent));
+        }
+	else if((lq = al_NEWlookup(&(ifp->hrdsrc),lv->addr,0)) == NULLLQ)
+            tprintf("%-17s","");
+        else
+            tprintf("%-17s",tformat(secclock() - lq->time));
+
+	/* 06Apr2021, Maiko, Added digi call, nice to know who it is */
+        tprintf("%8d",lv->currxcnt);
+        if (tprintf("  %-10s\n", pax25(tmp,lv->digi)) == EOF)
+            return EOF;
+    }
+    return 0;
+}
+
+#endif
   
 static int
 doaxfilter(argc,argv,p)
@@ -722,6 +880,8 @@ void *p;
     return 0;
 }
 
+#ifndef	KLM_HLREVAMP_2022
+
 static int
 doaxflush(argc,argv,p)
 int argc;
@@ -744,6 +904,57 @@ void *p;
     numad = numal = 0;  /* K5JB */
     return 0;
 }
+
+#else
+
+/*
+ * 05Mar2022, Maiko (VE4KLM), for the revamped heard list we must now cycle
+ * through all interfaces and clear out each heard list that way, since jnos
+ * will no longer use the 3 (potentially huge) heard link lists from before,
+ * each rooted at Lq, Ld, and Lv - they are gone now with this revamp ...
+ */
+
+static int doaxflush (int argc, char **argv, void *p)
+{
+	struct lq *lp, *lp1;
+	struct ld *ld, *ld1;
+	struct lv *lv, *lv1;
+
+	struct iface *ifp;
+
+	for (ifp = Ifaces; ifp != NULLIF; ifp = ifp->next)
+	{
+		for (lp = ifp->hrdsrc; lp != NULLLQ; lp = lp1)
+		{
+			lp1 = lp->next;
+			free (lp);
+		}
+
+		ifp->hrdsrc = NULLLQ;
+
+		for (ld = ifp->hrddst; ld != NULLLD; ld = ld1)
+		{
+			ld1 = ld->next;
+			free (ld);
+		}
+
+		ifp->hrddst = NULLLD;
+
+		for (lv = ifp->hrdvia; lv != NULLLV; lv = lv1)
+		{
+			lv1 = lv->next;
+			free (lv);
+		}
+
+		ifp->hrdvia = NULLLV;
+	}
+
+	numad = numal = 0;  /* K5JB */
+
+	return 0;
+}
+
+#endif
   
 static int
 doaxreset(argc,argv,p)

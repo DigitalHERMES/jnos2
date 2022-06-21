@@ -1,11 +1,211 @@
 
- You should refresh this page on every visit to ensure you get the latest information.
+ Refresh this page on every visit to ensure you get the latest information.
 
  I try to update the latest documentation project when time permits :
 
    https://www.langelaar.net/jnos2/documents/j2addendum.txt
 
- The latest version of it is also present in the rsync area.
+ The latest version of it is also present in the rsync area (needs updating)
+
+
+ May 20, 2022
+ ------------
+
+ I never liked the fact I had no record of messages sent from the BBS prompt,
+ so finally decided to write code to append all sent messages to local file :
+
+    $JNOS/spool/mail/<callsign>_s.txt
+
+ The cool thing about this is that it's just another mailbox file, so you can
+ now change to the area from the BBS prompt, and see all your sent messages,
+ and use Read, Verbose, SC, SF, KM, whatever commands, on them just like you
+ would with your regular mailbox or any other BBS area you interact with :
+
+     JNOS (ve4klm)
+
+     login: ve4klm
+     Password: 
+     [JNOS-2.0n.dev-B1FHIM$]
+     You have 2 messages  -  1 new.
+     (#1) >
+     ar ve4klm_s
+     ve4klm_s: 2 messages  -  2 new.
+     (#1) >
+
+ TODO : Already thinking perhaps 'ar sent' would be better ?
+         (where the sent implies <callsign>_s type of thing)
+
+ This might require some tweaking of headers, or maybe not. Let me know if you
+ run into any problems. It's mostly the indexing I want to be sure is working.
+
+ If you want to try this, follow the instructions from May 14 further down,
+ and note the following additions to those instructions :
+ 
+    add -DJ2_FILESENTMSGS to the makefile
+
+    cp hlrevamp2022/mboxmail.c .
+
+ For N2NOV - you have to add the following for your lower case BID fix :
+
+    add -DN2NOV_REQUESTED
+
+
+ May 14, 2022
+ ------------
+
+ I am retracting instructions from May 6, they're not clear, and things break,
+ so here's an update for those interested in using the new smtp MIME support,
+ and snmpd enhancements if they want - the heard code is not ready right now,
+ so do NOT copy the entire hlrevamp2022 subdirectory over at this time.
+
+ I am putting together a new release, JNOS 2.0n.dev, available via RSYNC.
+
+ The new features are detailed further below, but here are the instructions
+ you will need to follow to incorporate smtp MIME support and snmpd mods :
+
+    cd < whatever your build directory is >
+
+    rsync -av www.langelaar.net::jnos2 .
+
+    # note a new version 2.0n.dev
+    cp hlrevamp2022/version.c .
+
+    cp hlrevamp2022/smtpserv.c .
+
+    # this kludge is only Charles, lowercase BID on SB fix ?
+    cp KLUDGE_CH_mboxmail.c mboxmail.c
+
+    cp hlrevamp2022/mailutil.h .
+    cp hlrevamp2022/j2base64.c .
+    cp hlrevamp2022/files.c .
+
+    # mods requested by Mark, but anyone can use these
+    cp hlrevamp2022/snmpd.c .
+
+    edit your existing makefile :
+
+    1) Look for the 'UNIX=' section, add j2base64.o as below :
+
+       j2tmpnam.o getusage.o j2KLMlists.o j2strings.o j2base36.o \
+       activeBID.o j2base64.o
+
+    2) Make sure you PATCHES section looks as below :
+
+      PATCHES = -fsigned-char -DKLM_MAILIT_MIMEAWARE
+
+    make clean
+    ./configure
+    make
+
+ 1) Dealing with MIME encoded incoming mail
+    ---------------------------------------
+
+ The JNOS smtp server is now MIME aware when delivering to local mail areas.
+
+ IF you choose to enable this feature, any MIME content is now processed,
+ attachments are saved to user paths taken from ftpusers file, any base64
+ encoded content is decoded, so when a user checks their mail, all they
+ should see is text/plain and text/html, the rest will be references to
+ any saved attachments. The text/hmtl probably should go elsewhere, but
+ for now, this is how it all works. It will evolve as time permits.
+
+ To enable this feature, edit your makefile, and add :
+
+    -DKLM_MAILIT_MIMEAWARE
+
+ to the end of the PATCHES variable, in other words :
+
+    PATCHES = -fsigned-char -DKLM_MAILIT_MIMEAWARE
+
+ Warning - this alters the BODY (not the headers) of how the incoming mail
+ will appear to the user. If you plan on forwarding your local mail areas
+ to other systems, any referred attachments will obviously not make it to
+ the remote systems you forward with - I hope that makes sense.
+
+ A couple of sysops have already told me they are happy with that :]
+
+ I will add another option for those that do NOT want the mail areas to
+ be processed by smtp, and would rather just have a mime decode version
+ of the RM (read message) and V (verbose message) commands.
+
+ Having said that, another thing to consider is if you use an email client,
+ like thunderbird, then having the SMTP processing MIME will not be great,
+ since you will no longer be able to directly access the attachments.
+
+ This is most certainly a work in progress, but it seems to work.
+ 
+ 2) Some improvements to SNMP server
+    --------------------------------
+ 
+ Added 2 more MIBS for sysLocation and sysContact.
+
+ JNOS should now send a proper NoSuchName (NoSuchObject) response for any
+ queries for MIBS that do not exist in the JNOS implementation, replacing
+ the previous behaviour of always responding with sysName.0 (hostname) if
+ a requested MIB could not be found or wasn't supported.
+
+ NOTE : snmpwalk only works for ifName and ifDesc (nothing else) ...
+
+ The usage (help) dialogue for the snmp command is now read from file,
+ using my recent getusage() functions - /jnos/usage/snmp.txt for most
+ configurations, you can find this file under usage subdirectory from
+ your rsync session. Here is the new syntax for snmp commands :
+
+    JNOS 2.0 - SNMP Configuration
+
+     snmp ifaces     list all ports in numerical index form
+
+     snmp ro community [ipaddr pattern]*
+
+      NOTE : if you do NOT specify an ipaddr pattern, then ANYONE is allowed
+
+     snmp sysLocation [any text]
+
+     snmp sysContact [any text]
+
+ 3) Multiple heard lists for individual ax25 ports
+    ----------------------------------------------
+
+ This is VERY experimental, introducing the concept of multiples heard lists for
+ individual ports, with the ability to switch between them on the fly, for cases
+ where you might be switching frequencies or bands throughout the day, like I do,
+ but wanting stations heard on specific bands, kept in the separate heard lists.
+
+ This is NOT ready for general use - I'm just documenting, so I don't forget :]
+
+ The switching of heard lists will be confusing to the user right now, so needs
+ a bit more work - example of new subcommand :
+
+    ax25 h new=17m rp0    create or switch to an already created heard
+                          list called '17m' for port rp0
+
+ To switch back to very original heard list for port rp0, you would do :
+
+    ax25 h new=rp0 rp0
+
+ Confusing, yes, so trying to figure out a better syntax, and there is still
+ a few glitches when switching heard lists, it's not working quite right ...
+
+ To enable this feature, edit your makefile, and add :
+
+    -DKLM_HLREVAMP_2022
+
+ to the end of the PATCHES variable, in other words :
+
+    PATCHES = -fsigned-char -DKLM_HLREVAMP_2022 -DKLM_MAILIT_MIMEAWARE
+
+
+ January 3, 2022
+ ---------------
+
+ - Modified configure script to not allow the following define in config.h :
+
+     #define SPEED_UP_TICK
+
+   This was a badly thought out idea, and breaks timers and stuff, don't use it.
+    (not in present form anyways, was experimental from 2013, might revisit)
+
+   Modified makefile, simply to match the configure script version.
 
 
  changes to Web Based User BBS interface - November 25, 2021
@@ -3552,5 +3752,5 @@ differences between JNOS 2.0c5 and 2.0c4
 
 -----
 
-Copyright (C) 2004-2021 by Maiko Langelaar / VE4KLM
+Copyright (C) 2004-2022 by Maiko Langelaar / VE4KLM
 

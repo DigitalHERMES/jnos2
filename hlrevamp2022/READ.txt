@@ -1,0 +1,96 @@
+
+ Updated 13Mar2022, now have ability to switch heard lists !
+
+ To switch to a new (or existing) heard list, you can do this now :
+
+    ax25 h new=17m rp0
+
+ to switch back to the original default, use :
+
+    ax25 h new=rp0 rp0
+
+ I will change the code later to new=default instead, that way
+ there is no way to mess up the port name, or have to enter it
+ twice.
+
+ *** new RX only option ***
+
+ iface.c
+  new rx only option under ifconfig, soft switch to disable sending of data
+  out the port, effectively disabling TX, mostly for my RPR stuff.
+
+ *** VERY EXPERIMENTAL - 05Mar2022, Maiko (VE4KLM) ***
+
+You probably won't see anything different, this is new code, and if anything
+I just want people to try it out and make sure it is stable. From here, I am
+planning on adding the ability to have multiple heard lists that you can switch
+between per iface (port) - in case you want to change frequencis or bands on a
+particular port, but keep the heard lists specific to the frequency or band.
+
+The heard lists are not sorted from most recent to past in this version, BUT
+you can 'ax25 h save crap', then immediately 'ax25 h load crap', to remedy.
+
+These file can be copied over the LATEST official rsync, nothing earlier.
+
+To use these changes, edit your makefile, and modify PATCHES as below :
+
+   PATCHES = -fsigned-char -DKLM_HLREVAMP_2022
+
+You have to do a MASS compile AFTER you edit your 'makefile', then :
+
+   make clean
+   ./configure
+   make
+
+Revamped Heard List code
+------------------------
+
+ Removal of the big 3 Lq, Ld, and Lv link lists
+
+ Each interface now has it's own directly accessible link lists
+
+ Added -DKLM_HLREVAMP_2022 to makefile to affect the changes !
+
+ Seems to be working and stable on my test JNOS using live save file
+
+-r--r--r-- 1 root root  29765 Mar  5 16:23 axheard.c
+-rw-r--r-- 1 root root   5469 Mar  5 16:18 axhsort.c
+-r--r--r-- 1 root root  66105 Mar  5 12:58 scc.c
+-r--r--r-- 1 root root  20520 Mar  5 12:58 pktdrvr.c
+-rw-r--r-- 1 root root  12801 Mar  5 12:57 multipsk.c
+-rw-r--r-- 1 root root   6124 Mar  5 12:56 kiss.c
+-r--r--r-- 1 root root  10321 Mar  5 12:55 baycom.c
+-rw-r--r-- 1 root root  41974 Mar  5 12:55 ax25.c
+-r--r--r-- 1 root root  13440 Mar  5 12:54 asy.c
+-rw-r--r-- 1 root root  10319 Mar  5 12:51 agwpe.c
+-rw-r--r-- 1 root root   8467 Mar  5 12:51 winrpr.c
+-r--r--r-- 1 root root  68338 Mar  5 12:49 rspf.c
+-r--r--r-- 1 root root  12615 Mar  5 12:48 ax25.h
+-r--r--r-- 1 root root   8214 Mar  5 12:35 jheard.c
+-r--r--r-- 1 root root  51241 Mar  5 12:24 ax25cmd.c
+-r--r--r-- 1 root root   9878 Mar  5 12:00 iface.h
+
+ 5:10 pm - all the above files copied to NEW /jnos/src/rsync/hlrevamp2022, and noting diffs :
+
+ agwpe.c, asy.c, ax25.c, baycom.c, kiss.c, multipsk.c, pktdrvr.c, scc.c, winrpr.c 
+  initialize 3 newly added iface struct hrd pointers
+   (not sure if these will stay here, might store outside of structure still)
+
+ iface.h
+  3 new hrd list pointers in iface structure
+   (not sure if these will stay here, might store outside of structure still)
+
+ ax25.h
+  new prototope for revamped SRC lookup function
+
+ ax25cmd.c, axheard.c, jheard.c
+  significant changes
+   (start of a new ax25 heard subcommand, SET heardlist, stay tuned)
+
+ rspf.c
+   (using revamped SRC lookup function)
+
+ axhsort.c
+  not required anymore, heard list still needs sorts, but find other way to do it
+
+
